@@ -37,10 +37,13 @@ function decideColors(
 }
 
 function decideBumps(rng: Rng, config: WavyBumpsWave, tendency: WavyBumpsInputs['bumpsTendency']) {
-    config.spacing = randomInt(50, 300, rng)
-
     const rolled = rng()
     const flat = tendency === 'random' ? rolled < 0.25 : tendency === 'flat'
+
+    const spacingRoll = rng()
+    const spaceClose = flat ? spacingRoll < 0.6 : spacingRoll < 0.3
+    console.log({ flat, spaceClose })
+    config.spacing = spaceClose ? randomInt(30, 100, rng) : randomInt(50, 250, rng)
 
     if (flat) {
         config.highMax = randomInt(85, 110, rng)

@@ -278,19 +278,19 @@ new p5(
             let m = p.min(window.innerWidth, window.innerHeight)
             let canvas = p.createCanvas(m, m).elt as HTMLCanvasElement
 
-            recorder = new Recorder({
-                canvas: canvas as HTMLCanvasElement,
-                draw: (ms) => {
-                    drawing.draw(ms)
-                },
-                position: 'bottom-right',
-            })
-            recorder.on('beforeStart', () => {
-                p.noLoop()
-                drawing.restart()
-                drawing.lastChangeTilesTime = null
-                drawing.lastTime = null
-            })
+            // recorder = new Recorder({
+            //     canvas: canvas as HTMLCanvasElement,
+            //     draw: (ms) => {
+            //         drawing.draw(ms)
+            //     },
+            //     // position: 'bottom-right',
+            // })
+            // recorder.on('beforeStart', () => {
+            //     p.noLoop()
+            //     drawing.restart()
+            //     drawing.lastChangeTilesTime = null
+            //     drawing.lastTime = null
+            // })
 
             // p.rectMode(p.CENTER)
             p.strokeCap(p.SQUARE)
@@ -304,7 +304,7 @@ new p5(
         }
 
         p.draw = function () {
-            if (recorder.isRecording) return
+            // if (recorder.isRecording) return
 
             drawing.draw(p.millis())
         }
