@@ -1,1 +1,0 @@
-function r(o){let e,t=!1,i=!0;function n(a){e=requestAnimationFrame(n),o(a)}return e=requestAnimationFrame(n),{stop:()=>{cancelAnimationFrame(e),t=!0,i=!1},isLooping:()=>i,isStopped:()=>t}}export{r as l};

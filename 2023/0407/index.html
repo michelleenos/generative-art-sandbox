@@ -1,28 +1,38 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Generative Art</title>
 
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Generative Art</title>
-  <script type="module" crossorigin src="/generative-art-2023/assets/src/2023/0407/index.html-9598de5b.js"></script>
-  <link rel="modulepreload" crossorigin href="/generative-art-2023/assets/modulepreload-polyfill-3cfb730f.js">
-  <link rel="modulepreload" crossorigin href="/generative-art-2023/assets/index-8d178fc0.js">
-  <link rel="modulepreload" crossorigin href="/generative-art-2023/assets/utils-410b772c.js">
-  <link rel="modulepreload" crossorigin href="/generative-art-2023/assets/petal-feaf2d7c.js">
-  <link rel="modulepreload" crossorigin href="/generative-art-2023/assets/loop-9a51de3b.js">
-  <link rel="modulepreload" crossorigin href="/generative-art-2023/assets/_commonjsHelpers-725317a4.js">
-  <link rel="modulepreload" crossorigin href="/generative-art-2023/assets/_commonjs-dynamic-modules-302442b1.js">
-  <link rel="modulepreload" crossorigin href="/generative-art-2023/assets/jszip.min-f5692425.js">
-  <link rel="modulepreload" crossorigin href="/generative-art-2023/assets/canvas-images-d0bfdd66.js">
-  <link rel="stylesheet" href="/generative-art-2023/assets/style-59f3b7bd.css">
-</head>
+        <style>
+            #canvas-container.petals-canvas-container {
+                padding-inline: max(50vw - 400px, 50px);
+                padding-block: max(50vh - 400px, 50px);
+                width: auto;
+                overflow: auto;
+            }
 
-<body>
-    
-    <div id="btns" class="absolute-container">
-        <a href="/">back</a>
-    </div>
-</body>
+            canvas {
+                border: 1px solid rgba(255, 255, 255, 0.2);
+            }
+        </style>
+      <script type="module" crossorigin src="/generative-art-2023/assets/src/2023/0407/index.html-a723dfd1.js"></script>
+      <link rel="modulepreload" crossorigin href="/generative-art-2023/assets/modulepreload-polyfill-3cfb730f.js">
+      <link rel="modulepreload" crossorigin href="/generative-art-2023/assets/utils-4e5d7968.js">
+      <link rel="modulepreload" crossorigin href="/generative-art-2023/assets/petal-6c1bb702.js">
+      <link rel="modulepreload" crossorigin href="/generative-art-2023/assets/create-canvas-8d178fc0.js">
+      <link rel="modulepreload" crossorigin href="/generative-art-2023/assets/loop-7ca8c0d9.js">
+      <link rel="modulepreload" crossorigin href="/generative-art-2023/assets/tweakpane-bb65b8df.js">
+      <link rel="modulepreload" crossorigin href="/generative-art-2023/assets/canvas-save-image-ae0eb976.js">
+      <link rel="stylesheet" href="/generative-art-2023/assets/style-1c143a8f.css">
+    </head>
 
+    <body>
+        <div class="petals-canvas-container" id="canvas-container"></div>
+        
+        <div id="btns" class="absolute-container">
+            <a href="/">back</a>
+        </div>
+    </body>
 </html>

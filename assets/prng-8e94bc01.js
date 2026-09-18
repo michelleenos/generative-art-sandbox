@@ -1,0 +1,1 @@
+function u(n=i()){return function(){let t=n+=1831565813;return t=Math.imul(t^t>>>15,t|1),t^=t+Math.imul(t^t>>>7,t|61),((t^t>>>14)>>>0)/4294967296}}function i(n=Math.random){return n()*2**32>>>0}function d(n){const t=u(n);function f(e,o){return typeof e>"u"?t():typeof e=="number"?typeof o>"u"?t()*e:t()*(o-e)+e:e[Math.floor(t()*e.length)]}return f}export{i as a,d as m};

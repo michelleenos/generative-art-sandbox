@@ -1,0 +1,1 @@
+import{c as u}from"./utils-4e5d7968.js";import{e as c}from"./easings-ac43f515.js";const v=({total:s,each:o,start:m=0,ease:a,steps:g})=>{let i=s-o,p=o/s,l=[];for(let t=0;t<g;t++){let r=t/(g-1);a&&(r=c[a](r));let e=i*r+m,n=e+o,f=e/s;l.push({start:e,end:n,duration:o,normStart:f})}return{vals:l,getProgress:(t,r)=>{let{normStart:e}=l[r],n=(t-e)/p;return u(n,0,1)}}};export{v as g};
