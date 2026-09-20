@@ -1,6 +1,7 @@
 import type { XY } from './walking-utils'
 import { Field } from './field'
 import { SquareDir, squareDirs } from './walk-directions'
+import type { initWalkers } from './walking-utils'
 
 type WalkerStep = {
     xy: XY
@@ -24,6 +25,8 @@ export class Walker {
     maxSteps: number
     wrap: boolean
     color: string
+    /** a meta field only used for animation atm. set by {@link initWalkers} */
+    patternIndex = -1
 
     constructor({ field, start, startDir, maxSteps, color, wrap = true }: WalkerParams) {
         this.field = field

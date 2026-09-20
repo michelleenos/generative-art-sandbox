@@ -3,13 +3,14 @@ import { Rng } from '~/helpers/prng'
 import { Field } from './field'
 import { createPatterns, createTessPatterns } from './patterns'
 import { SquareDir } from './walk-directions'
+import { Walker } from './walker'
 
 export type XY = [number, number]
 
-export interface Walker {
-    done: boolean
-    walk: () => void
-}
+// export interface Walker {
+//     done: boolean
+//     walk: () => void
+// }
 
 export type WalkerParams = {
     field: Field
@@ -75,16 +76,16 @@ export function initWalkers<W extends Walker>(
             let y = 0
             while (ny(y) < field.rows) {
                 if (field.valid(nx(x), ny(y))) {
-                    walkers.push(
-                        new Ctor({
-                            field,
-                            start: [nx(x), ny(y)],
-                            startDir: dir,
-                            maxSteps,
-                            color,
-                            wrap,
-                        }),
-                    )
+                    const walker = new Ctor({
+                        field,
+                        start: [nx(x), ny(y)],
+                        startDir: dir,
+                        maxSteps,
+                        color,
+                        wrap,
+                    })
+                    walker.patternIndex = pi
+                    walkers.push(walker)
                 }
                 y++
             }
