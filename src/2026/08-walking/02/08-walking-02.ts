@@ -1,20 +1,24 @@
 import GUI from 'lil-gui'
-import { getPaletteVariants, PaletteVariant } from 'mish-bainrow'
 import { saveCanvasAtCoords } from '~/helpers/canvas-save-image'
-import { chaikinSmoothTuple } from '~/helpers/chaikin-smooth'
 import { clickAndHold } from '~/helpers/click-and-hold'
 import createCanvas from '~/helpers/create-canvas'
 import { makePalettesGui } from '~/helpers/gui-palettes'
 import { makeRandomSeed, makeRng, Rng } from '~/helpers/prng'
 import { Sizes } from '~/helpers/sizes'
-import { random, shuffle } from '~/helpers/utils'
+import { shuffle } from '~/helpers/utils'
 import '~/style.css'
 import { Field } from '../field'
-import { Walker, XY } from '../walking-utils'
-import { drawPath, smoothDrawPath, walkStep } from '../walking-utils'
+import { palettes, WalkerPalette } from '../walker-palettes'
+import {
+    drawGrid,
+    drawPath,
+    getFinalPaths,
+    initWalkers,
+    smoothDrawPath,
+    walkAll,
+    walkStep,
+} from '../walking-utils'
 import { Walker2 } from './walker2'
-import { createPatterns, createTessPatterns } from '../patterns'
-import { palettes } from '../walker-palettes'
 
 const C = {
     cell: 10,
@@ -23,172 +27,19 @@ const C = {
     maxSteps: 200,
     tileMin: 10,
     tileMax: 20,
-    cornerSmoothTimes: 2,
-    cornerSmoothAmt: 0.25,
     extraCells: 0,
     walkTogether: false,
     wrap: false,
     patternEven: false,
     tesselation: false,
 
-    step: false,
-    holdInterval: 80,
-
-    drawGrid: false,
-    clip: false,
-    debgShapes: false,
     fillSingle: false,
 
-    minContrastBg: 1,
-    minColors: 2,
-    bgColorType: 'light' as 'light' | 'dark' | 'edge',
-    bgEdge: 10,
-}
+    debgShapes: false,
+    drawGrid: false,
+    clip: false,
 
-function initWalkers(field: Field, colors: string[], rng: Rng) {
-    let walkers: Walker2[] = []
-    const patternParams = {
-        rng,
-        count: C.patterns,
-        tileMin: C.tileMin,
-        tileMax: C.tileMax,
-        type: C.patternEven ? 'even' : 'mixed',
-    } as const
-    let patterns = C.tesselation
-        ? createTessPatterns({
-              ...patternParams,
-              rows: field.rows,
-              cols: field.cols,
-          })
-        : createPatterns(patternParams)
-
-    let pi = 0
-    patterns.forEach(({ nx, ny, dir }) => {
-        let x = 0
-        let color = colors[pi % colors.length]
-        pi++
-
-        while (nx(x) < field.cols) {
-            let y = 0
-            while (ny(y) < field.rows) {
-                if (field.valid(nx(x), ny(y))) {
-                    walkers.push(
-                        new Walker2({
-                            field,
-                            start: [nx(x), ny(y)],
-                            startDir: dir,
-                            maxSteps: C.maxSteps,
-                            color,
-                            wrap: C.wrap,
-                        }),
-                    )
-                }
-                y++
-            }
-            x++
-        }
-    })
-
-    return walkers
-}
-
-function initWalkers2(field: Field, colors: string[]) {
-    const walkers: Walker2[] = []
-
-    let walkerParams = { field, maxSteps: C.maxSteps, wrap: C.wrap }
-
-    let rows = Math.floor(field.rows / 4)
-    for (let y = 0, x = 0, i = 0; y < field.rows && x < field.cols / 2; y += 2, x += 3, i++) {
-        walkers.push(
-            new Walker2({
-                ...walkerParams,
-                start: [x, y],
-                startDir: 1,
-                color: colors[0],
-            }),
-            // new Walker2({
-            //     ...walkerParams,
-            //     start: [field.cols - 1, y + 1],
-            //     startDir: 3,
-            //     color: colors[1],
-            //     clockwise: true,
-            // }),
-        )
-    }
-
-    for (let y = field.rows - 1, x = 0; y > field.rows / 2 && x < field.cols; y -= 2, x += 2) {
-        walkers.push(
-            new Walker2({
-                ...walkerParams,
-                start: [x, y],
-                startDir: 0,
-                color: colors[1],
-            }),
-        )
-    }
-
-    return walkers
-}
-
-function walk(walkers: Walker[]) {
-    let done = true
-    for (let i = 0; i < walkers.length; i++) {
-        let walker = walkers[i]
-        if (walker.done) continue
-
-        done = false
-        walker.walk()
-    }
-    return done
-}
-
-function walkAll(walkers: Walker[], together = true) {
-    if (together) {
-        let done = false
-        while (!done) {
-            done = walk(walkers)
-        }
-    } else {
-        for (let i = 0; i < walkers.length; i++) {
-            let walker = walkers[i]
-            while (!walker.done) {
-                walker.walk()
-            }
-        }
-    }
-}
-
-function getFinalPaths(walkers: Walker2[]) {
-    return walkers.map((walker) => {
-        let paths = walker.segments.map((s) => {
-            let scaled: XY[] = s.map(([x, y]) => [x * C.cell, y * C.cell])
-            return chaikinSmoothTuple(scaled, C.cornerSmoothTimes, C.cornerSmoothAmt)
-        })
-        return { walker, paths }
-    })
-}
-type DrawGridParams = {
-    cols: number
-    rows: number
-    cell: number
-}
-function drawGrid(ctx: CanvasRenderingContext2D, { cols, rows, cell }: DrawGridParams) {
-    let height = rows * cell
-    let width = cols * cell
-    ctx.strokeStyle = '#000'
-    ctx.lineWidth = 0.15
-    for (let x = 0; x < cols + 1; x++) {
-        ctx.beginPath()
-        ctx.moveTo(x * C.cell, 0)
-        ctx.lineTo(x * C.cell, height)
-        ctx.stroke()
-    }
-    for (let y = 0; y < rows + 1; y++) {
-        ctx.beginPath()
-        ctx.moveTo(0, y * C.cell)
-        ctx.lineTo(width, y * C.cell)
-        ctx.stroke()
-    }
+    step: false,
 }
 
 class Drawing {
@@ -198,9 +49,9 @@ class Drawing {
     outer!: { cols: number; rows: number; w: number; h: number }
     field!: Field
     walkers!: Walker2[]
-    palette: PaletteVariant
+    palette: WalkerPalette
 
-    constructor(palette: PaletteVariant, seed?: number) {
+    constructor(palette: WalkerPalette, seed?: number) {
         this.palette = palette
         this.generate(seed)
     }
@@ -224,13 +75,27 @@ class Drawing {
 
         this.field = new Field(oCols, oRows)
         const colors = shuffle([...this.palette.colors], makeRng(makeRandomSeed(this.rng)))
-        this.walkers = initWalkers(this.field, colors, this.rng)
+        this.walkers = initWalkers(Walker2, this.field, {
+            colors,
+            rng: this.rng,
+            count: C.patterns,
+            tileMin: C.tileMin,
+            tileMax: C.tileMax,
+            patternEven: C.patternEven,
+            tesselation: C.tesselation,
+            maxSteps: C.maxSteps,
+            wrap: C.wrap,
+        })
 
         if (!C.step) walkAll(this.walkers, C.walkTogether)
     }
 
     draw(ctx: CanvasRenderingContext2D, sizes: Sizes) {
-        let withPaths = getFinalPaths(this.walkers)
+        let withPaths = getFinalPaths(this.walkers, {
+            cell: C.cell,
+            cornerSmoothTimes: 2,
+            cornerSmoothAmt: 0.25,
+        })
         const lw = C.cell * 0.7
         ctx.fillStyle = this.palette.bg
         ctx.fillRect(0, 0, sizes.width, sizes.height)
@@ -293,7 +158,7 @@ function doStep() {
  * Setup
  */
 
-let palette = random(palettes)
+let palette = palettes[0]
 
 const sizes = new Sizes()
 const { ctx, resizeCanvas, canvas } = createCanvas(sizes.width, sizes.height)

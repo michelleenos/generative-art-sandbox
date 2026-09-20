@@ -1,7 +1,5 @@
-import { Rng } from '~/helpers/prng'
 import { Field } from '../field'
-// import { SquareDir, squareDirections, squareDirKeys, Walker, XY } from '../types'
-import { SquareDir, squareDirKeys, squareDirs } from '../walk-directions'
+import { SquareDir, squareDirs } from '../walk-directions'
 import { Walker, XY } from '../walking-utils'
 
 type WalkerParams = {
@@ -77,10 +75,6 @@ export class Walker1 implements Walker {
 
     add(step: WalkerStep) {
         if (step.newSegment) {
-            // let cur = this.cur
-            // let dir = squareDirections[this.dir]
-            // this.segment.push([cur[0] + dir[0], cur[1] + dir[1]])
-            // this.segments.push([[step.xy[0] - dir[0], step.xy[1] - dir[1]], step.xy])
             this.segments.push([step.xy])
         } else {
             this.segment.push(step.xy)
@@ -105,7 +99,6 @@ export class Walker1 implements Walker {
         }
 
         this.add(next)
-        // if (next.newSegment) this.walk()
 
         if (this.curSteps >= this.maxSteps) {
             this.done = true

@@ -1,22 +1,4 @@
-// type XY = [number, number]
-// type Vec2Like = { x: number; y: number }
-
-// function isVec2Like(obj: unknown): obj is Vec2Like {
-// 	if (typeof obj !== 'object' || obj === null) return false
-// 	let o = obj as Vec2Like
-// 	if (typeof o['x'] !== 'number') return false
-// 	if (typeof o['y'] !== 'number') return false
-// 	return true
-// }
-
-// function isXY(item: unknown): item is XY {
-// 	if (!Array.isArray(item)) return false
-// 	if (item.length !== 2) return false
-// 	if (typeof item[0] !== 'number' || typeof item[1] !== 'number') return false
-// 	return true
-// }
-
-function smoothOnce(inPts: { x: number; y: number }[]) {
+function smoothOnce(inPts: { x: number; y: number }[], amt = 0.25) {
     const len = inPts.length
     if (len === 0) return []
 
@@ -29,12 +11,12 @@ function smoothOnce(inPts: { x: number; y: number }[]) {
         const b = inPts[i + 1]
         out.push(
             {
-                x: a.x * 0.75 + b.x * 0.25,
-                y: a.y * 0.75 + b.y * 0.25,
+                x: a.x * (1 - amt) + b.x * amt,
+                y: a.y * (1 - amt) + b.y * amt,
             },
             {
-                x: a.x * 0.25 + b.x * 0.75,
-                y: a.y * 0.25 + b.y * 0.75,
+                x: a.x * amt + b.x * (1 - amt),
+                y: a.y * amt + b.y * (1 - amt),
             },
         )
     }
@@ -44,6 +26,9 @@ function smoothOnce(inPts: { x: number; y: number }[]) {
     return out
 }
 
+/**
+ * Same as `smoothOnce()` but takes points in the form `[number, number]` instead of `{ x: number; y: number }`
+ */
 function smoothOnceTuple(inPts: [number, number][], amt = 0.25) {
     const len = inPts.length
     if (len === 0) return []
@@ -65,16 +50,33 @@ function smoothOnceTuple(inPts: [number, number][], amt = 0.25) {
     return out
 }
 
-export function chaikinSmooth(pts: { x: number; y: number }[], times: number) {
+/**
+ * Applies Chaikin's corner cutting algorithm to smooth a path of points. The more times you apply it, the smoother the path becomes. Each application of the algorithm doubles the number of points in the output array.
+ * @param inPts
+ * @param times - number of times to apply the smoothing algorithm. Increases the number of points in the output array by a factor of 2^times
+ * @param amt - amount of smoothing to apply. 0.25 is the default and is the standard Chaikin's algorithm. 0.5 is more aggressive, while 0.1 is more subtle.
+ */
+export function chaikinSmooth(pts: { x: number; y: number }[], times: number, amt = 0.25) {
     let out: { x: number; y: number }[] = pts
 
     for (let t = 0; t < times; t++) {
-        out = smoothOnce(out)
+        out = smoothOnce(out, amt)
     }
 
     return out
 }
 
+/**
+ * Applies Chaikin's corner cutting algorithm to smooth a path of points.
+ * The more times you apply it, the smoother the path becomes.
+ * Each application of the algorithm doubles the number of points in the output array.
+ *
+ * This fn is the same as `chaikinSmooth()` except takes points in the form `[number, number] `
+ * instead of `{ x: number; y: number }`
+ * @param pts
+ * @param times - number of times to apply the smoothing algorithm. Increases the number of points in the output array by a factor of 2^times
+ * @param amt - amount of smoothing to apply. 0.25 is the default and is the standard Chaikin's algorithm. 0.5 is more aggressive, while 0.1 is more subtle.
+ */
 export function chaikinSmoothTuple(pts: [number, number][], times: number, amt = 0.25) {
     let out: [number, number][] = pts
     for (let t = 0; t < times; t++) {

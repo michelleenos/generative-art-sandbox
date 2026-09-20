@@ -1,6 +1,8 @@
-import { PaletteVariant } from 'mish-bainrow'
-import { makeRandomSeed, makeRng, Rng } from '~/helpers/prng'
-import { shuffle } from '~/helpers/utils'
+import { chaikinSmoothTuple } from '~/helpers/chaikin-smooth'
+import { Rng } from '~/helpers/prng'
+import { Field } from './field'
+import { createPatterns, createTessPatterns } from './patterns'
+import { SquareDir } from './walk-directions'
 
 export type XY = [number, number]
 
@@ -9,10 +11,107 @@ export interface Walker {
     walk: () => void
 }
 
-export function walkUntilDone(walker: Walker) {
-    while (!walker.done) {
-        walker.walk()
-    }
+export type WalkerParams = {
+    field: Field
+    start: XY
+    maxSteps: number
+    color: string
+    startDir: SquareDir
+    wrap?: boolean
+}
+
+type WalkerCtor<W extends Walker> = new (params: WalkerParams) => W
+
+export type InitWalkersOptions = {
+    colors: string[]
+    rng: Rng
+    count: number
+    tileMin: number
+    tileMax: number
+    patternEven: boolean
+    tesselation: boolean
+    maxSteps: number
+    wrap: boolean
+}
+
+export function initWalkers<W extends Walker>(
+    Ctor: WalkerCtor<W>,
+    field: Field,
+    {
+        colors,
+        rng,
+        count,
+        tileMin,
+        tileMax,
+        patternEven,
+        tesselation,
+        maxSteps,
+        wrap,
+    }: InitWalkersOptions,
+): W[] {
+    let walkers: W[] = []
+    const patternParams = {
+        rng,
+        count,
+        tileMin,
+        tileMax,
+        type: patternEven ? 'even' : 'mixed',
+    } as const
+    let patterns = tesselation
+        ? createTessPatterns({
+              ...patternParams,
+              rows: field.rows,
+              cols: field.cols,
+          })
+        : createPatterns(patternParams)
+
+    let pi = 0
+    patterns.forEach(({ nx, ny, dir }) => {
+        let x = 0
+        let color = colors[pi % colors.length]
+        pi++
+
+        while (nx(x) < field.cols) {
+            let y = 0
+            while (ny(y) < field.rows) {
+                if (field.valid(nx(x), ny(y))) {
+                    walkers.push(
+                        new Ctor({
+                            field,
+                            start: [nx(x), ny(y)],
+                            startDir: dir,
+                            maxSteps,
+                            color,
+                            wrap,
+                        }),
+                    )
+                }
+                y++
+            }
+            x++
+        }
+    })
+
+    return walkers
+}
+
+export type SmoothOptions = {
+    cell: number
+    cornerSmoothTimes: number
+    cornerSmoothAmt: number
+}
+
+export function getFinalPaths<W extends { segments: XY[][] }>(
+    walkers: W[],
+    { cell, cornerSmoothTimes, cornerSmoothAmt }: SmoothOptions,
+) {
+    return walkers.map((walker) => {
+        let paths = walker.segments.map((s) => {
+            let scaled: XY[] = s.map(([x, y]) => [x * cell, y * cell])
+            return chaikinSmoothTuple(scaled, cornerSmoothTimes, cornerSmoothAmt)
+        })
+        return { walker, paths }
+    })
 }
 
 export function walkStep(walkers: Walker[], together = true) {
@@ -22,7 +121,7 @@ export function walkStep(walkers: Walker[], together = true) {
         for (let i = 0; i < walkers.length; i++) {
             let walker = walkers[i]
             if (walker.done) continue
-            walkUntilDone(walker)
+            while (!walker.done) walker.walk()
             break
         }
     }
@@ -30,22 +129,16 @@ export function walkStep(walkers: Walker[], together = true) {
 
 export function walkAll(walkers: Walker[], together = true) {
     if (together) {
-        let allDone = false
-        while (!allDone) {
-            let roundDone = true
-            for (let i = 0; i < walkers.length; i++) {
-                let walker = walkers[i]
-                if (walker.done) continue
-
-                roundDone = false
-                walker.walk()
+        // step every walker once per round until all are done
+        while (walkers.some((walker) => !walker.done)) {
+            for (let walker of walkers) {
+                if (!walker.done) walker.walk()
             }
-            allDone = roundDone
         }
     } else {
-        for (let i = 0; i < walkers.length; i++) {
-            let walker = walkers[i]
-            walkUntilDone(walker)
+        // start from the first, walk til done, only then move to the next
+        for (let walker of walkers) {
+            while (!walker.done) walker.walk()
         }
     }
 }
@@ -95,13 +188,5 @@ export function drawGrid(ctx: CanvasRenderingContext2D, { cols, rows, cell }: Dr
         ctx.moveTo(0, y * cell)
         ctx.lineTo(width, y * cell)
         ctx.stroke()
-    }
-}
-
-export function getColors(palette: PaletteVariant, _rng: Rng) {
-    const rng = makeRng(makeRandomSeed(_rng))
-    return {
-        ...palette,
-        colors: shuffle([...palette.colors], rng),
     }
 }

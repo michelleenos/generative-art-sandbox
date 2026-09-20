@@ -111,3 +111,5 @@ export const palettes = [
         name: 'pearly-0',
     },
 ]
+
+export type WalkerPalette = (typeof palettes)[number]
