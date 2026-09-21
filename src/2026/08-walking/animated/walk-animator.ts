@@ -90,7 +90,7 @@ export function buildAnimPaths<W extends AnimWalker>(
 }
 
 /**
- * Move the pen along a stroke by a signed `delta` (px).
+ * Move the pen along a stroke by `delta` px.
  * Positive paints on, negative un-paints.
  */
 export function advancePath(p: AnimPath, delta: number): void {
@@ -121,7 +121,6 @@ export function advancePath(p: AnimPath, delta: number): void {
 
 /**
  * Assign each stroke an `order` rank by sorting on `key` (ascending). `key`
- * receives the original array index so "generation order" can key on it.
  * Ranking is dense: strokes with an equal key share a rank, so a key that
  * collides (e.g. by color) forms groups that `schedule` starts together.
  * Ordering is independent of scheduling — it only sets the sequence.
@@ -191,11 +190,20 @@ export function timelineDuration(paths: AnimPath[], speed: number): number {
     return max
 }
 
-/** drive every stroke to where it should be at global time `t` (seconds) */
-export function scrubTo(paths: AnimPath[], t: number, speed: number): void {
+export type EaseFn = (x: number) => number
+
+const linear: EaseFn = (x) => x
+
+/**
+ * Drive every stroke to where it should be at global time `t` (seconds). `ease`
+ * shapes each stroke's own 0–1 progress, so it eases in/out as it paints without
+ * changing when it starts or ends.
+ */
+export function scrubTo(paths: AnimPath[], t: number, speed: number, ease: EaseFn = linear): void {
     for (const p of paths) {
-        const localTime = t - p.startOffset
-        const target = Math.max(0, Math.min(p.totalLength, localTime * speed))
+        const duration = p.totalLength / speed
+        const u = duration > 0 ? Math.max(0, Math.min(1, (t - p.startOffset) / duration)) : 0
+        const target = ease(u) * p.totalLength
         advancePath(p, target - p.revealedLength)
     }
 }
@@ -228,6 +236,7 @@ export type PathAnimatorOptions<W> = {
     speed?: number
     overlap?: number
     mode?: ScheduleMode
+    pathEase?: EaseFn
 }
 
 /**
@@ -241,6 +250,8 @@ export class PathAnimator<W extends Walker> {
     overlap: number
     mode: ScheduleMode
     orderKey: OrderKey<W>
+    /** shapes each stroke's own paint-on progress */
+    pathEase: EaseFn
     /** 0–1, synced each frame for a progress slider to bind to */
     progress = 0
     playing = false
@@ -256,18 +267,22 @@ export class PathAnimator<W extends Walker> {
         this.speed = opts.speed ?? 400
         this.overlap = opts.overlap ?? 0.9
         this.mode = opts.mode ?? 'stagger'
+        this.pathEase = opts.pathEase ?? linear
     }
 
     get duration() {
         return timelineDuration(this.paths, this.speed)
     }
 
-    /** swap in freshly built paths */
+    /** swap in freshly built paths, holding the current progress fraction fixed */
     setPaths(paths: AnimPath<W>[]) {
+        const playing = this.playing
+        const progress = this.progress
         this.pause()
         this.paths = paths
         this.reschedule()
-        this.update()
+        this.elapsed = progress * this.duration
+        playing ? this.play() : this.update()
     }
 
     /** recompute order + startOffsets; run when order/mode/speed/overlap change */
@@ -276,16 +291,23 @@ export class PathAnimator<W extends Walker> {
         schedule(this.paths, this.mode, { speed: this.speed, overlap: this.overlap })
     }
 
-    /** reschedule then redraw the current frame (for GUI param changes) */
+    /** reschedule then redraw, holding the current progress fraction fixed */
     applyTimeline() {
+        const progress = this.progress
         this.reschedule()
+        this.elapsed = progress * this.duration
+        this.update()
+    }
+
+    /** redraw the current frame without rescheduling (e.g. after pathEase change) */
+    refresh() {
         this.update()
     }
 
     private update() {
         const d = this.duration
         this.elapsed = Math.max(0, Math.min(d, this.elapsed))
-        scrubTo(this.paths, this.elapsed, this.speed)
+        scrubTo(this.paths, this.elapsed, this.speed, this.pathEase)
         this.progress = d > 0 ? this.elapsed / d : 0
         this.onFrame()
     }

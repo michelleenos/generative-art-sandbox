@@ -8,7 +8,15 @@ import { initWalkers, smoothDrawPath, walkAll } from '../walking-utils'
 import { Field } from '../field'
 import { shuffle } from '~/helpers/utils'
 import { Walker3 } from '../03/walker3'
-import { AnimPath, buildAnimPaths, getRevealedPoints, PathAnimator } from './walk-animator'
+import {
+    AnimPath,
+    buildAnimPaths,
+    getRevealedPoints,
+    PathAnimator,
+    ScheduleMode,
+} from './walk-animator'
+import { easing, Easing } from '~/helpers/easings'
+import { makePalettesGui } from '~/helpers/gui-palettes'
 
 const C = {
     cell: 10,
@@ -27,7 +35,12 @@ const C = {
     clip: false,
     extraCells: 0,
 
-    orderBy: 'generation' as keyof typeof orderKeys,
+    // animation
+    speed: 400,
+    overlap: 0.2,
+    mode: 'stagger' as ScheduleMode,
+    orderBy: 'byPattern' as keyof typeof orderKeys,
+    pathEase: 'inOutSine' as Easing,
 }
 
 const colorKey = (c: string) => {
@@ -142,18 +155,41 @@ const drawing = new Drawing(palette)
 
 const animator = new PathAnimator<Walker3>({
     onFrame: () => drawing.draw(ctx, sizes),
+    speed: C.speed,
+    overlap: C.overlap,
+    mode: C.mode,
     orderKey: orderKeys[C.orderBy],
+    pathEase: easing[C.pathEase],
 })
 animator.setPaths(drawing.animPaths)
+
+/** push the config in C onto the animator */
+const syncAnimator = () => {
+    animator.speed = C.speed
+    animator.overlap = C.overlap
+    animator.mode = C.mode
+    animator.orderKey = orderKeys[C.orderBy]
+    animator.pathEase = easing[C.pathEase]
+}
 
 sizes.on('resize', (width, height) => {
     resizeCanvas(width, height)
     drawing.draw(ctx, sizes)
 })
 
+animator.play()
+
 /**
  * GUI
  */
+const onTimelineChange = () => {
+    syncAnimator()
+    animator.applyTimeline()
+}
+const regenerate = (seed: number | boolean) => {
+    drawing.generate(seed)
+    animator.setPaths(drawing.animPaths)
+}
 
 const gui = new GUI()
 gui.add(drawing, 'seed').listen()
@@ -165,18 +201,14 @@ gui.add(animator, 'progress', 0, 1, 0.001)
     .listen()
     .onChange((v: number) => animator.seek(v))
 
-gui.add(animator, 'mode', ['stagger', 'align-endings']).onChange(() => animator.applyTimeline())
-gui.add(C, 'orderBy', Object.keys(orderKeys)).onChange(() => {
-    animator.orderKey = orderKeys[C.orderBy]
-    animator.applyTimeline()
+gui.add(C, 'mode', ['stagger', 'align-endings']).onChange(onTimelineChange)
+gui.add(C, 'orderBy', Object.keys(orderKeys)).onChange(onTimelineChange)
+gui.add(C, 'speed', 40, 2000, 1).onChange(onTimelineChange)
+gui.add(C, 'overlap', 0, 1, 0.01).onChange(onTimelineChange)
+gui.add(C, 'pathEase', Object.keys(easing)).onChange(() => {
+    syncAnimator()
+    animator.refresh()
 })
-gui.add(animator, 'speed', 40, 2000, 1).onChange(() => animator.applyTimeline())
-gui.add(animator, 'overlap', 0, 1, 0.01).onChange(() => animator.applyTimeline())
-
-const regenerate = (seed: number | boolean) => {
-    drawing.generate(seed)
-    animator.setPaths(drawing.animPaths)
-}
 
 gui.add({ newSeed: () => regenerate(true) }, 'newSeed')
 
@@ -191,6 +223,11 @@ f.add(C, 'patternEven')
 f.add(C, 'tesselation')
 f.add(C, 'wrap')
 f.onChange(() => regenerate(false))
+
+makePalettesGui(gui.addFolder('colors'), drawing.palette, palettes, (pal) => {
+    drawing.palette = pal
+    regenerate(false)
+})
 
 // @ts-ignore
 window.debg = { drawing, animator, ctx, sizes, C }
