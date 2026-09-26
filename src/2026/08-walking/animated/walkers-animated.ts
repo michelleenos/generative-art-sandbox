@@ -8,13 +8,8 @@ import { initWalkers, smoothDrawPath, walkAll } from '../walking-utils'
 import { Field } from '../field'
 import { shuffle } from '~/helpers/utils'
 import { Walker3 } from '../03/walker3'
-import {
-    AnimPath,
-    buildAnimPaths,
-    PathAnimator,
-    ScheduleOptions,
-    Stroke,
-} from './walk-animator'
+import { Walker } from '../walker'
+import { AnimPath, buildAnimPaths, PathAnimator, ScheduleOptions, Stroke } from './walk-animator'
 import { easing, Easing } from '~/helpers/easings'
 import { makePalettesGui } from '~/helpers/gui-palettes'
 
@@ -38,7 +33,7 @@ const C = {
     // animation
     speed: 400,
     overlap: 0.8,
-    mode: 'stagger' as ScheduleOptions<Walker3>['mode'],
+    mode: 'stagger' as ScheduleOptions<Walker>['mode'],
     orderBy: 'centerOut' as keyof typeof orderKeys,
     pathEase: 'inOutSine' as Easing,
     staggerEase: 'linear' as Easing,
@@ -49,7 +44,7 @@ const C = {
  * Distance is rounded to whole cells so each ring starts together.
  */
 function radialFrom(fx: number, fy: number) {
-    return (p: AnimPath<Walker3>) => {
+    return (p: AnimPath<Walker>) => {
         const { cols, rows } = p.walker.field
         const [x, y] = p.points[0]
         return Math.round(Math.hypot(x / C.cell - fx * (cols - 1), y / C.cell - fy * (rows - 1)))
@@ -57,12 +52,12 @@ function radialFrom(fx: number, fy: number) {
 }
 
 const orderKeys = {
-    generation: (_p: AnimPath<Walker3>, i: number) => i,
-    longestFirst: (p: AnimPath<Walker3>) => -p.totalLength,
-    shortestFirst: (p: AnimPath<Walker3>) => p.totalLength,
-    leftToRight: (p: AnimPath<Walker3>) => p.points[0][0],
-    topLeft: (p: AnimPath<Walker3>) => p.points[0][0] + p.points[0][1],
-    byPattern: (p: AnimPath<Walker3>) => p.walker.patternIndex,
+    generation: (_p: AnimPath<Walker>, i: number) => i,
+    longestFirst: (p: AnimPath<Walker>) => -p.totalLength,
+    shortestFirst: (p: AnimPath<Walker>) => p.totalLength,
+    leftToRight: (p: AnimPath<Walker>) => p.points[0][0],
+    topLeft: (p: AnimPath<Walker>) => p.points[0][0] + p.points[0][1],
+    byPattern: (p: AnimPath<Walker>) => p.walker.patternIndex,
     centerOut: radialFrom(0.5, 0.5),
     topLeftOut: radialFrom(0, 0),
 
@@ -75,7 +70,7 @@ class Drawing {
     inner!: { cols: number; rows: number; w: number; h: number }
     outer!: { cols: number; rows: number; w: number; h: number }
     field!: Field
-    walkers!: Walker3[]
+    walkers!: Walker[]
     palette: WalkerPalette
 
     constructor(palette: WalkerPalette, seed?: number) {
@@ -156,7 +151,7 @@ const { ctx, resizeCanvas } = createCanvas(sizes.width, sizes.height)
 
 const drawing = new Drawing(palette)
 
-const animator = new PathAnimator<Walker3>({
+const animator = new PathAnimator<Walker>({
     onFrame: () => drawing.draw(ctx, sizes, animator.frame()),
     getOptions: () => ({
         mode: C.mode,
