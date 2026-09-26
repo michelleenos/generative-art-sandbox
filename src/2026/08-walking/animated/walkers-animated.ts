@@ -11,13 +11,12 @@ import { Walker3 } from '../03/walker3'
 import {
     AnimPath,
     buildAnimPaths,
-    getRevealedPoints,
     PathAnimator,
-    ScheduleMode,
+    ScheduleOptions,
+    Stroke,
 } from './walk-animator'
 import { easing, Easing } from '~/helpers/easings'
 import { makePalettesGui } from '~/helpers/gui-palettes'
-import { Walker } from '../walker'
 
 const C = {
     cell: 10,
@@ -39,7 +38,7 @@ const C = {
     // animation
     speed: 400,
     overlap: 0.8,
-    mode: 'stagger' as ScheduleMode,
+    mode: 'stagger' as ScheduleOptions<Walker3>['mode'],
     orderBy: 'centerOut' as keyof typeof orderKeys,
     pathEase: 'inOutSine' as Easing,
     staggerEase: 'linear' as Easing,
@@ -77,7 +76,6 @@ class Drawing {
     outer!: { cols: number; rows: number; w: number; h: number }
     field!: Field
     walkers!: Walker3[]
-    animPaths!: AnimPath<Walker3>[]
     palette: WalkerPalette
 
     constructor(palette: WalkerPalette, seed?: number) {
@@ -117,14 +115,9 @@ class Drawing {
         })
 
         walkAll(this.walkers, C.walkTogether)
-        this.animPaths = buildAnimPaths(this.walkers, {
-            cell: C.cell,
-            cornerSmoothTimes: C.cornerSmoothTimes,
-            cornerSmoothAmt: C.cornerSmoothAmt,
-        })
     }
 
-    draw(ctx: CanvasRenderingContext2D, sizes: Sizes) {
+    draw(ctx: CanvasRenderingContext2D, sizes: Sizes, strokes: Stroke[]) {
         const lw = C.cell * 0.7
         ctx.fillStyle = this.palette.bg
         ctx.fillRect(0, 0, sizes.width, sizes.height)
@@ -142,10 +135,10 @@ class Drawing {
         ctx.translate(C.cell / 2, C.cell / 2)
         ctx.lineCap = 'round'
         ctx.lineWidth = lw
-        this.animPaths.forEach((p) => {
-            ctx.strokeStyle = p.color
+        strokes.forEach(({ points, color }) => {
+            ctx.strokeStyle = color
             ctx.beginPath()
-            smoothDrawPath(ctx, getRevealedPoints(p))
+            smoothDrawPath(ctx, points)
             ctx.stroke()
         })
 
@@ -164,29 +157,21 @@ const { ctx, resizeCanvas } = createCanvas(sizes.width, sizes.height)
 const drawing = new Drawing(palette)
 
 const animator = new PathAnimator<Walker3>({
-    onFrame: () => drawing.draw(ctx, sizes),
-    speed: C.speed,
-    overlap: C.overlap,
-    mode: C.mode,
-    orderKey: orderKeys[C.orderBy],
-    pathEase: easing[C.pathEase],
-    staggerEase: easing[C.staggerEase],
+    onFrame: () => drawing.draw(ctx, sizes, animator.frame()),
+    getOptions: () => ({
+        mode: C.mode,
+        speed: C.speed,
+        overlap: C.overlap,
+        orderKey: orderKeys[C.orderBy],
+        pathEase: easing[C.pathEase],
+        staggerEase: easing[C.staggerEase],
+    }),
 })
-animator.setPaths(drawing.animPaths)
-
-/** push the config in C onto the animator */
-const syncAnimator = () => {
-    animator.speed = C.speed
-    animator.overlap = C.overlap
-    animator.mode = C.mode
-    animator.orderKey = orderKeys[C.orderBy]
-    animator.pathEase = easing[C.pathEase]
-    animator.staggerEase = easing[C.staggerEase]
-}
+animator.setPaths(buildAnimPaths(drawing.walkers, C))
 
 sizes.on('resize', (width, height) => {
     resizeCanvas(width, height)
-    drawing.draw(ctx, sizes)
+    drawing.draw(ctx, sizes, animator.frame())
 })
 
 animator.play()
@@ -194,13 +179,10 @@ animator.play()
 /**
  * GUI
  */
-const onTimelineChange = () => {
-    syncAnimator()
-    animator.applyTimeline()
-}
+const onTimelineChange = () => animator.applyTimeline()
 const regenerate = (seed: number | boolean) => {
     drawing.generate(seed)
-    animator.setPaths(drawing.animPaths)
+    animator.setPaths(buildAnimPaths(drawing.walkers, C))
 }
 
 const gui = new GUI()
@@ -218,10 +200,7 @@ gui.add(C, 'orderBy', Object.keys(orderKeys)).onChange(onTimelineChange)
 gui.add(C, 'speed', 40, 2000, 1).onChange(onTimelineChange)
 gui.add(C, 'overlap', 0, 1, 0.01).onChange(onTimelineChange)
 gui.add(C, 'staggerEase', Object.keys(easing)).onChange(onTimelineChange)
-gui.add(C, 'pathEase', Object.keys(easing)).onChange(() => {
-    syncAnimator()
-    animator.refresh()
-})
+gui.add(C, 'pathEase', Object.keys(easing)).onChange(() => animator.update())
 
 gui.add({ newSeed: () => regenerate(true) }, 'newSeed')
 

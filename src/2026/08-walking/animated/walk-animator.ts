@@ -1,38 +1,20 @@
 import { chaikinSmoothTuple } from '~/helpers/chaikin-smooth'
 import type { XY } from '../walking-utils'
-import { Walker } from '../walker'
-
-type AnimWalker = { segments: XY[][]; color: string }
 
 /**
  * One animatable stroke (one continuous pen segment), smoothed and scaled to px.
- * The cursor fields (`drawnIndex`, `carry`, `revealedLength`, `done`) are mutable
- * state advanced by `advancePath`. `walker` keeps the source walker so `applyOrder`
- * keys can sort on walker data (pattern, direction, etc).
+ * `walker` keeps the source walker so order keys can sort on walker data.
  */
-export type AnimPath<W = Walker> = {
+export type AnimPath<W> = {
     points: XY[]
     color: string
     walker: W
-    /** entrance rank; set by `applyOrder`, defaults to flat generation order */
-    order: number
+    /** full arc-length of the stroke, px */
+    totalLength: number
     /** when this stroke starts painting, in seconds; set by `schedule` */
     startOffset: number
-    /** full arc-length of the stroke (a scalar, not a per-point array) */
-    totalLength: number
-    /** index of the last fully-revealed point */
-    drawnIndex: number
-    /** pixels revealed INTO the segment after `drawnIndex` */
-    carry: number
-    /** total px revealed so far (kept in sync for absolute scrubbing) */
-    revealedLength: number
-    done: boolean
-}
-
-export type BuildAnimPathsOptions = {
-    cell: number
-    cornerSmoothTimes: number
-    cornerSmoothAmt: number
+    /** px revealed so far; set by `scrubTo` */
+    revealed: number
 }
 
 /**
@@ -48,13 +30,12 @@ function segLength(points: XY[], i: number): number {
  * scale-then-Chaikin smoothing so the animation can carry its own per-stroke data
  * without perturbing the static drawings.
  */
-export function buildAnimPaths<W extends AnimWalker>(
+export function buildAnimPaths<W extends { segments: XY[][]; color: string }>(
     walkers: W[],
-    opts: BuildAnimPathsOptions,
+    opts: { cell: number; cornerSmoothTimes: number; cornerSmoothAmt: number },
 ): AnimPath<W>[] {
     const { cell, cornerSmoothTimes, cornerSmoothAmt } = opts
     const out: AnimPath<W>[] = []
-    let flatIndex = 0
 
     walkers.forEach((walker) => {
         walker.segments.forEach((segment) => {
@@ -73,111 +54,69 @@ export function buildAnimPaths<W extends AnimWalker>(
                 points,
                 color: walker.color,
                 walker,
-                order: flatIndex,
-                startOffset: 0,
                 totalLength,
-                drawnIndex: 0,
-                carry: 0,
-                revealedLength: 0,
-                done: false,
+                startOffset: 0,
+                revealed: 0,
             })
-
-            flatIndex++
         })
     })
 
     return out
 }
 
-/**
- * Move the pen along a stroke by `delta` px.
- * Positive paints on, negative un-paints.
- */
-export function advancePath(p: AnimPath, delta: number): void {
-    const { points } = p
-    const last = points.length - 1
-
-    // clamp first so carry can't overflow past the ends
-    const newRevealed = Math.max(0, Math.min(p.totalLength, p.revealedLength + delta))
-    let remaining = p.carry + (newRevealed - p.revealedLength)
-
-    // forward: consume whole segments we can cover
-    let segLen: number
-    while (p.drawnIndex < last && remaining >= (segLen = segLength(points, p.drawnIndex))) {
-        remaining -= segLen
-        p.drawnIndex++
-    }
-
-    // backward: step back over segments while we've over-spent
-    while (p.drawnIndex > 0 && remaining < 0) {
-        p.drawnIndex--
-        remaining += segLength(points, p.drawnIndex)
-    }
-
-    p.carry = remaining
-    p.revealedLength = newRevealed
-    p.done = newRevealed >= p.totalLength
-}
+export type EaseFn = (x: number) => number
+const linear: EaseFn = (x) => x
 
 /**
- * Assign each stroke an `order` rank by sorting on `key` (ascending). `key`
- * Ranking is dense: strokes with an equal key share a rank, so a key that
- * collides (e.g. by color) forms groups that `schedule` starts together.
- * Ordering is independent of scheduling — it only sets the sequence.
+ * Timeline params that decide when each stroke starts. Changing any of these
+ * needs a reschedule (`applyTimeline`).
  */
-export function applyOrder<W>(
-    paths: AnimPath<W>[],
-    key: (p: AnimPath<W>, originalIndex: number) => number,
-): void {
-    const withKey = paths.map((p, i) => ({ p, k: key(p, i) })).sort((a, b) => a.k - b.k)
-    let rank = 0
-    withKey.forEach(({ p, k }, i) => {
-        if (i > 0 && k !== withKey[i - 1].k) rank++
-        p.order = rank
-    })
-}
-
-export type ScheduleMode = 'stagger' | 'stagger-endings' | 'align-endings'
-
-export type ScheduleOptions = {
+export type ScheduleOptions<W> = {
+    /** sort key for entrance order; strokes with equal keys start together */
+    orderKey: (p: AnimPath<W>, originalIndex: number) => number
+    /**
+     * - `stagger`: each order group starts before the previous ends by `overlap` of its duration
+     * - `stagger-endings`: like `stagger`, but staggers finish times instead of start times
+     * - `align-endings`: longer strokes start earlier so all finish together (ignores order)
+     */
+    mode: 'stagger' | 'stagger-endings' | 'align-endings'
     /** paint rate, px per second */
     speed: number
-    /** 0–1 fraction of a stroke's duration that overlaps the next (stagger mode) */
+    /** 0–1 fraction of a stroke's duration that overlaps the next (stagger modes) */
     overlap: number
-    /** remaps stagger start times across the span of entries (stagger mode) */
-    staggerEase?: EaseFn
+    /** remaps stagger start times across the span of entries (stagger modes) */
+    staggerEase: EaseFn
 }
 
 /**
- * Compute each stroke's `startOffset` (seconds) for the chosen mode. Run only
- * when mode/order/speed/overlap change — not per frame.
- * - `stagger`: each stroke starts before the previous ends by `overlap` of its duration
- * - `stagger-endings`: like `stagger`, but staggers finish times instead of start times
- * - `align-endings`: longer strokes start earlier so all finish together.
+ * Compute each stroke's `startOffset` (seconds) and return the total duration.
+ * Run only when order/mode/speed/overlap change — not per frame.
  */
-export function schedule(paths: AnimPath[], mode: ScheduleMode, opts: ScheduleOptions): void {
-    const { speed, overlap, staggerEase = linear } = opts
+function schedule<W>(paths: AnimPath<W>[], opts: ScheduleOptions<W>): number {
+    const { orderKey, mode, speed, overlap, staggerEase } = opts
+    if (paths.length === 0 || speed <= 0) return 0
+    const dur = (p: AnimPath<W>) => p.totalLength / speed
 
     if (mode === 'align-endings') {
         let maxLen = 0
         for (const p of paths) maxLen = Math.max(maxLen, p.totalLength)
         for (const p of paths) p.startOffset = (maxLen - p.totalLength) / speed
-        return
+        return maxLen / speed
     }
 
-    // strokes sharing an order start together as a group; the gap to the next
+    // strokes sharing a key start together as a group; the gap to the next
     // group is (1 - overlap) of the group's longest stroke duration
     // (for stagger-endings, `startOffset` holds finish time until the end)
+    const sorted = paths.map((p, i) => ({ p, k: orderKey(p, i) })).sort((a, b) => a.k - b.k)
     const gap = 1 - overlap
-    const sorted = [...paths].sort((a, b) => a.order - b.order)
     let t = 0
     let i = 0
     while (i < sorted.length) {
-        const groupOrder = sorted[i].order
+        const groupKey = sorted[i].k
         let maxDur = 0
-        while (i < sorted.length && sorted[i].order === groupOrder) {
-            sorted[i].startOffset = t
-            maxDur = Math.max(maxDur, sorted[i].totalLength / speed)
+        while (i < sorted.length && sorted[i].k === groupKey) {
+            sorted[i].p.startOffset = t
+            maxDur = Math.max(maxDur, dur(sorted[i].p))
             i++
         }
         t += gap * maxDur
@@ -194,149 +133,114 @@ export function schedule(paths: AnimPath[], mode: ScheduleMode, opts: ScheduleOp
     if (mode === 'stagger-endings') {
         let minStart = Infinity
         for (const p of paths) {
-            p.startOffset -= p.totalLength / speed
+            p.startOffset -= dur(p)
             minStart = Math.min(minStart, p.startOffset)
         }
         for (const p of paths) p.startOffset -= minStart
     }
+
+    let total = 0
+    for (const p of paths) total = Math.max(total, p.startOffset + dur(p))
+    return total
 }
-
-/** total animation length in seconds (needs `startOffset` already scheduled) */
-export function timelineDuration(paths: AnimPath[], speed: number): number {
-    if (paths.length === 0 || speed <= 0) return 0
-    let max = 0
-    for (const p of paths) {
-        max = Math.max(max, p.startOffset + p.totalLength / speed)
-    }
-    return max
-}
-
-export type EaseFn = (x: number) => number
-
-const linear: EaseFn = (x) => x
 
 /**
- * Drive every stroke to where it should be at global time `t` (seconds). `ease`
+ * Set every stroke's `revealed` length for global time `t` (seconds). `ease`
  * shapes each stroke's own 0–1 progress, so it eases in/out as it paints without
  * changing when it starts or ends.
  */
-export function scrubTo(paths: AnimPath[], t: number, speed: number, ease: EaseFn = linear): void {
+function scrubTo<W>(paths: AnimPath<W>[], t: number, speed: number, ease: EaseFn = linear) {
     for (const p of paths) {
         const duration = p.totalLength / speed
         const u = duration > 0 ? Math.max(0, Math.min(1, (t - p.startOffset) / duration)) : 0
-        const target = ease(u) * p.totalLength
-        advancePath(p, target - p.revealedLength)
+        p.revealed = ease(u) * p.totalLength
     }
 }
 
 /**
- * The points to actually draw for the current cursor position: the fully-revealed
- * segments plus an end point interpolated between the last point and `carry` px
- * into the current segment.
+ * The points to actually draw: every point up to `revealed` px along the stroke,
+ * plus an end point interpolated into the current segment.
  */
-export function getRevealedPoints(p: AnimPath): XY[] {
-    const { points, drawnIndex } = p
-    if (p.revealedLength <= 0) return []
-    if (p.done || drawnIndex >= points.length - 1) return points
+function getRevealedPoints<W>(p: AnimPath<W>): XY[] {
+    const { points } = p
+    if (p.revealed <= 0) return []
+    if (p.revealed >= p.totalLength) return points
 
-    const revealed = points.slice(0, drawnIndex + 1)
-    const segLen = segLength(points, drawnIndex)
-    const t = segLen > 0 ? p.carry / segLen : 0
-    const a = points[drawnIndex]
-    const b = points[drawnIndex + 1]
-    revealed.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t])
-    return revealed
+    const out: XY[] = [points[0]]
+    let remaining = p.revealed
+    for (let i = 0; i < points.length - 1; i++) {
+        const len = segLength(points, i)
+        if (remaining < len) {
+            const t = len > 0 ? remaining / len : 0
+            const [a, b] = [points[i], points[i + 1]]
+            out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t])
+            break
+        }
+        remaining -= len
+        out.push(points[i + 1])
+    }
+    return out
 }
 
-export type OrderKey<W> = (p: AnimPath<W>, originalIndex: number) => number
+/** a stroke as it should be drawn this frame */
+export type Stroke = { points: XY[]; color: string }
 
-export type PathAnimatorOptions<W> = {
-    /** called after each scrub so the caller can redraw */
-    onFrame: () => void
-    orderKey?: OrderKey<W>
-    speed?: number
-    overlap?: number
-    mode?: ScheduleMode
-    pathEase?: EaseFn
-    staggerEase?: EaseFn
+/** everything `PathAnimator` reads from `getOptions`: schedule params + `pathEase` */
+type AnimatorOptions<W> = ScheduleOptions<W> & {
+    /** shapes each stroke's own paint-on progress */
+    pathEase: EaseFn
 }
 
 /**
- * Owns the playback loop over a set of `AnimPath`s: play/pause, timeline params,
- * and scrubbing. Knows nothing about canvas or GUI — it scrubs the paths and
- * fires `onFrame` for the caller to draw.
+ * Owns the playback loop over a set of `AnimPath`s: play/pause and scrubbing.
+ * Knows nothing about canvas or GUI — it reads timeline params from `getOptions`,
+ * scrubs the paths, and fires `onFrame` so the caller can draw `frame()`.
  */
-export class PathAnimator<W extends Walker> {
+export class PathAnimator<W> {
     paths: AnimPath<W>[] = []
-    speed: number
-    overlap: number
-    mode: ScheduleMode
-    orderKey: OrderKey<W>
-    /** shapes each stroke's own paint-on progress */
-    pathEase: EaseFn
-    /** shapes the spacing of stroke start times (stagger mode) */
-    staggerEase: EaseFn
+    /** seconds; set by `applyTimeline` */
+    duration = 0
     /** 0–1, synced each frame for a progress slider to bind to */
     progress = 0
     playing = false
 
     private onFrame: () => void
+    private getOptions: () => AnimatorOptions<W>
     private elapsed = 0
     private rafId = 0
     private lastTime = 0
 
-    constructor(opts: PathAnimatorOptions<W>) {
+    constructor(opts: { onFrame: () => void; getOptions: () => AnimatorOptions<W> }) {
         this.onFrame = opts.onFrame
-        this.orderKey = opts.orderKey ?? ((_p, i) => i)
-        this.speed = opts.speed ?? 400
-        this.overlap = opts.overlap ?? 0.9
-        this.mode = opts.mode ?? 'stagger'
-        this.pathEase = opts.pathEase ?? linear
-        this.staggerEase = opts.staggerEase ?? linear
+        this.getOptions = opts.getOptions
     }
 
-    get duration() {
-        return timelineDuration(this.paths, this.speed)
+    /** what to draw right now: each stroke's revealed points + color */
+    frame(): Stroke[] {
+        return this.paths.map((p) => ({ points: getRevealedPoints(p), color: p.color }))
     }
 
     /** swap in freshly built paths, holding the current progress fraction fixed */
     setPaths(paths: AnimPath<W>[]) {
-        const playing = this.playing
-        const progress = this.progress
-        this.pause()
         this.paths = paths
-        this.reschedule()
-        this.elapsed = progress * this.duration
-        playing ? this.play() : this.update()
+        this.applyTimeline()
     }
 
-    /** recompute order + startOffsets; run when order/mode/speed/overlap change */
-    reschedule() {
-        applyOrder(this.paths, this.orderKey)
-        schedule(this.paths, this.mode, {
-            speed: this.speed,
-            overlap: this.overlap,
-            staggerEase: this.staggerEase,
-        })
-    }
-
-    /** reschedule then redraw, holding the current progress fraction fixed */
+    /** reschedule then redraw, holding the current progress fraction fixed.
+     * run when order/mode/speed/overlap/staggerEase change */
     applyTimeline() {
         const progress = this.progress
-        this.reschedule()
+        this.duration = schedule(this.paths, this.getOptions())
         this.elapsed = progress * this.duration
         this.update()
     }
 
     /** redraw the current frame without rescheduling (e.g. after pathEase change) */
-    refresh() {
-        this.update()
-    }
-
-    private update() {
+    update() {
+        const { speed, pathEase } = this.getOptions()
         const d = this.duration
         this.elapsed = Math.max(0, Math.min(d, this.elapsed))
-        scrubTo(this.paths, this.elapsed, this.speed, this.pathEase)
+        scrubTo(this.paths, this.elapsed, speed, pathEase)
         this.progress = d > 0 ? this.elapsed / d : 0
         this.onFrame()
     }
