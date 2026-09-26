@@ -17,6 +17,7 @@ import {
 } from './walk-animator'
 import { easing, Easing } from '~/helpers/easings'
 import { makePalettesGui } from '~/helpers/gui-palettes'
+import { Walker } from '../walker'
 
 const C = {
     cell: 10,
@@ -37,16 +38,23 @@ const C = {
 
     // animation
     speed: 400,
-    overlap: 0.2,
+    overlap: 0.8,
     mode: 'stagger' as ScheduleMode,
-    orderBy: 'byPattern' as keyof typeof orderKeys,
+    orderBy: 'centerOut' as keyof typeof orderKeys,
     pathEase: 'inOutSine' as Easing,
+    staggerEase: 'linear' as Easing,
 }
 
-const colorKey = (c: string) => {
-    let h = 0
-    for (const ch of c) h = (h * 31 + ch.charCodeAt(0)) | 0
-    return h
+/**
+ * Rings expanding from a point given as a 0–1 fraction of the field.
+ * Distance is rounded to whole cells so each ring starts together.
+ */
+function radialFrom(fx: number, fy: number) {
+    return (p: AnimPath<Walker3>) => {
+        const { cols, rows } = p.walker.field
+        const [x, y] = p.points[0]
+        return Math.round(Math.hypot(x / C.cell - fx * (cols - 1), y / C.cell - fy * (rows - 1)))
+    }
 }
 
 const orderKeys = {
@@ -55,8 +63,10 @@ const orderKeys = {
     shortestFirst: (p: AnimPath<Walker3>) => p.totalLength,
     leftToRight: (p: AnimPath<Walker3>) => p.points[0][0],
     topLeft: (p: AnimPath<Walker3>) => p.points[0][0] + p.points[0][1],
-    byColor: (p: AnimPath<Walker3>) => colorKey(p.color),
     byPattern: (p: AnimPath<Walker3>) => p.walker.patternIndex,
+    centerOut: radialFrom(0.5, 0.5),
+    topLeftOut: radialFrom(0, 0),
+
     together: () => 0,
 }
 
@@ -160,6 +170,7 @@ const animator = new PathAnimator<Walker3>({
     mode: C.mode,
     orderKey: orderKeys[C.orderBy],
     pathEase: easing[C.pathEase],
+    staggerEase: easing[C.staggerEase],
 })
 animator.setPaths(drawing.animPaths)
 
@@ -170,6 +181,7 @@ const syncAnimator = () => {
     animator.mode = C.mode
     animator.orderKey = orderKeys[C.orderBy]
     animator.pathEase = easing[C.pathEase]
+    animator.staggerEase = easing[C.staggerEase]
 }
 
 sizes.on('resize', (width, height) => {
@@ -201,10 +213,11 @@ gui.add(animator, 'progress', 0, 1, 0.001)
     .listen()
     .onChange((v: number) => animator.seek(v))
 
-gui.add(C, 'mode', ['stagger', 'align-endings']).onChange(onTimelineChange)
+gui.add(C, 'mode', ['stagger', 'stagger-endings', 'align-endings']).onChange(onTimelineChange)
 gui.add(C, 'orderBy', Object.keys(orderKeys)).onChange(onTimelineChange)
 gui.add(C, 'speed', 40, 2000, 1).onChange(onTimelineChange)
 gui.add(C, 'overlap', 0, 1, 0.01).onChange(onTimelineChange)
+gui.add(C, 'staggerEase', Object.keys(easing)).onChange(onTimelineChange)
 gui.add(C, 'pathEase', Object.keys(easing)).onChange(() => {
     syncAnimator()
     animator.refresh()

@@ -137,23 +137,26 @@ export function applyOrder<W>(
     })
 }
 
-export type ScheduleMode = 'stagger' | 'align-endings'
+export type ScheduleMode = 'stagger' | 'stagger-endings' | 'align-endings'
 
 export type ScheduleOptions = {
     /** paint rate, px per second */
     speed: number
     /** 0–1 fraction of a stroke's duration that overlaps the next (stagger mode) */
     overlap: number
+    /** remaps stagger start times across the span of entries (stagger mode) */
+    staggerEase?: EaseFn
 }
 
 /**
  * Compute each stroke's `startOffset` (seconds) for the chosen mode. Run only
  * when mode/order/speed/overlap change — not per frame.
  * - `stagger`: each stroke starts before the previous ends by `overlap` of its duration
+ * - `stagger-endings`: like `stagger`, but staggers finish times instead of start times
  * - `align-endings`: longer strokes start earlier so all finish together.
  */
 export function schedule(paths: AnimPath[], mode: ScheduleMode, opts: ScheduleOptions): void {
-    const { speed, overlap } = opts
+    const { speed, overlap, staggerEase = linear } = opts
 
     if (mode === 'align-endings') {
         let maxLen = 0
@@ -164,6 +167,7 @@ export function schedule(paths: AnimPath[], mode: ScheduleMode, opts: ScheduleOp
 
     // strokes sharing an order start together as a group; the gap to the next
     // group is (1 - overlap) of the group's longest stroke duration
+    // (for stagger-endings, `startOffset` holds finish time until the end)
     const gap = 1 - overlap
     const sorted = [...paths].sort((a, b) => a.order - b.order)
     let t = 0
@@ -177,6 +181,23 @@ export function schedule(paths: AnimPath[], mode: ScheduleMode, opts: ScheduleOp
             i++
         }
         t += gap * maxDur
+    }
+
+    let lastAnchor = 0
+    for (const p of paths) lastAnchor = Math.max(lastAnchor, p.startOffset)
+    if (lastAnchor > 0) {
+        for (const p of paths) {
+            p.startOffset = Math.max(0, staggerEase(p.startOffset / lastAnchor) * lastAnchor)
+        }
+    }
+
+    if (mode === 'stagger-endings') {
+        let minStart = Infinity
+        for (const p of paths) {
+            p.startOffset -= p.totalLength / speed
+            minStart = Math.min(minStart, p.startOffset)
+        }
+        for (const p of paths) p.startOffset -= minStart
     }
 }
 
@@ -237,6 +258,7 @@ export type PathAnimatorOptions<W> = {
     overlap?: number
     mode?: ScheduleMode
     pathEase?: EaseFn
+    staggerEase?: EaseFn
 }
 
 /**
@@ -252,6 +274,8 @@ export class PathAnimator<W extends Walker> {
     orderKey: OrderKey<W>
     /** shapes each stroke's own paint-on progress */
     pathEase: EaseFn
+    /** shapes the spacing of stroke start times (stagger mode) */
+    staggerEase: EaseFn
     /** 0–1, synced each frame for a progress slider to bind to */
     progress = 0
     playing = false
@@ -268,6 +292,7 @@ export class PathAnimator<W extends Walker> {
         this.overlap = opts.overlap ?? 0.9
         this.mode = opts.mode ?? 'stagger'
         this.pathEase = opts.pathEase ?? linear
+        this.staggerEase = opts.staggerEase ?? linear
     }
 
     get duration() {
@@ -288,7 +313,11 @@ export class PathAnimator<W extends Walker> {
     /** recompute order + startOffsets; run when order/mode/speed/overlap change */
     reschedule() {
         applyOrder(this.paths, this.orderKey)
-        schedule(this.paths, this.mode, { speed: this.speed, overlap: this.overlap })
+        schedule(this.paths, this.mode, {
+            speed: this.speed,
+            overlap: this.overlap,
+            staggerEase: this.staggerEase,
+        })
     }
 
     /** reschedule then redraw, holding the current progress fraction fixed */
