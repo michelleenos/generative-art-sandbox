@@ -16,8 +16,8 @@ import { getRibbon, getWobblyRibbons, smoothDrawRibbon } from '../ribbon'
 import { createNoise2D, NoiseFunction2D } from 'simplex-noise'
 
 const C = {
-    cell: 30,
-    grid: 25,
+    cell: 10,
+    grid: 80,
     patterns: 7,
     maxSteps: 200,
     tileMin: 10,
@@ -33,16 +33,26 @@ const C = {
     edgeSmoothTimes: 3,
     edgeSmoothAmt: 0.25,
 
-    noiseScale: 5,
-    noiseFreq: 0.1,
+    // line width as a fraction of cell
+    lineWidth: 0.7,
+    // noise values below are relative to the line width, so they hold up when `cell` changes
+    // wobble amount, in line widths
+    noiseScale: 0.3,
+    // wobble frequency, per line width (x0.01)
+    noiseFreq: 0.7,
     noiseOffsetEach: 5,
-    alpha: 0.3,
+    widthVary: 0.2,
+    // width-variation frequency, per line width (x0.01)
+    widthFreq: 0.35,
+    alpha: 0.25,
+    count: 8,
 
     clip: false,
     extraCells: 0,
 
     // animation
-    speed: 400,
+    // cells per second
+    speed: 40,
     overlap: 0.8,
     mode: 'stagger' as ScheduleOptions<Walker>['mode'],
     orderBy: 'centerOut' as keyof typeof orderKeys,
@@ -126,7 +136,7 @@ class Drawing {
     }
 
     draw(ctx: CanvasRenderingContext2D, sizes: Sizes, strokes: Stroke[]) {
-        const lw = C.cell * 0.7
+        const lw = C.cell * C.lineWidth
         ctx.fillStyle = this.palette.bg
         ctx.fillRect(0, 0, sizes.width, sizes.height)
 
@@ -143,20 +153,24 @@ class Drawing {
         ctx.translate(C.cell / 2, C.cell / 2)
         ctx.lineCap = 'round'
         ctx.lineWidth = lw
-        strokes.forEach(({ points, color }) => {
+        strokes.forEach(({ points, color }, si) => {
             if (points.length < 2) return
             ctx.fillStyle = color
             ctx.globalAlpha = C.alpha
             const ribbons = getWobblyRibbons(points, {
                 strokeWidth: lw,
                 taper: 1,
-                taperLen: 20,
+                taperLen: lw * 3,
                 taperType: 'symmetric',
-                freq: C.noiseFreq,
-                scale: C.noiseScale,
-                count: 5,
+                // convert line-width-relative config to px
+                freq: C.noiseFreq / lw,
+                scale: C.noiseScale * lw,
+                count: C.count,
                 noise: this.noise,
                 offsetEach: C.noiseOffsetEach,
+                seed: si,
+                widthVary: C.widthVary,
+                widthFreq: C.widthFreq / lw,
             })
             ribbons.forEach((ribbon) => {
                 ctx.beginPath()
@@ -184,7 +198,8 @@ const animator = new PathAnimator<Walker>({
     onFrame: () => drawing.draw(ctx, sizes, animator.frame()),
     getOptions: () => ({
         mode: C.mode,
-        speed: C.speed,
+        // animator works in px
+        speed: C.speed * C.cell,
         overlap: C.overlap,
         orderKey: orderKeys[C.orderBy],
         pathEase: easing[C.pathEase],
@@ -221,7 +236,7 @@ gui.add(animator, 'progress', 0, 1, 0.001)
 
 gui.add(C, 'mode', ['stagger', 'stagger-endings', 'align-endings']).onChange(onTimelineChange)
 gui.add(C, 'orderBy', Object.keys(orderKeys)).onChange(onTimelineChange)
-gui.add(C, 'speed', 40, 2000, 1).onChange(onTimelineChange)
+gui.add(C, 'speed', 4, 200, 0.5).onChange(onTimelineChange)
 gui.add(C, 'overlap', 0, 1, 0.01).onChange(onTimelineChange)
 gui.add(C, 'staggerEase', Object.keys(easing)).onChange(onTimelineChange)
 gui.add(C, 'pathEase', Object.keys(easing)).onChange(() => animator.update())
@@ -238,9 +253,12 @@ f.add(C, 'walkTogether')
 f.add(C, 'patternEven')
 f.add(C, 'tesselation')
 f.add(C, 'wrap')
-f.add(C, 'noiseFreq', 0, 1, 0.001)
-f.add(C, 'noiseScale', 0, 10, 0.1)
+f.add(C, 'lineWidth', 0.1, 1.5, 0.01)
+f.add(C, 'noiseFreq', 0, 5, 0.01)
+f.add(C, 'noiseScale', 0, 2, 0.01)
 f.add(C, 'noiseOffsetEach', 0, 5, 0.01)
+f.add(C, 'widthVary', 0, 1, 0.01)
+f.add(C, 'widthFreq', 0, 5, 0.01)
 f.add(C, 'alpha', 0, 1, 0.01)
 f.onChange(() => regenerate(false))
 

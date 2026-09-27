@@ -16,6 +16,8 @@ type RibbonParams = {
      * Use `symmetric` to taper at both ends, or `start`/`end` to taper only at one end.
      */
     taperType?: 'start' | 'end' | 'symmetric'
+    /** per-point width multiplier (defaults to 1 for every point) */
+    widths?: number[]
 }
 
 type RibbonStep = {
@@ -32,7 +34,7 @@ function progress(distance: number, max: number) {
 
 export function getRibbon(
     pts: [number, number][],
-    { strokeWidth, taper, taperLen, taperType = 'symmetric' }: RibbonParams,
+    { strokeWidth, taper, taperLen, taperType = 'symmetric', widths }: RibbonParams,
 ) {
     const len = pts.length
     const results: Ribbon = []
@@ -49,6 +51,7 @@ export function getRibbon(
             let pTaper = progress(distance, taperLen)
             w = map(pTaper, 0, 1, strokeWidth * taper, strokeWidth)
         }
+        w *= widths?.[i] ?? 1
         w /= 2
 
         const a = pts[Math.max(0, i - 1)]
@@ -97,39 +100,67 @@ export function getRibbon(
     return results
 }
 
+/**
+ * Displace a point by noise sampled at its distance along the stroke (`d`),
+ * so each stroke (`seed`) wobbles on its own regardless of where it sits on the canvas.
+ */
 function displacePoint(
     [x, y]: [number, number],
-    {
-        noise,
-        freq,
-        scale,
-        offset,
-    }: { noise: NoiseFunction2D; freq: number; scale: number; offset: number },
+    d: number,
+    { noise, freq, scale, seed }: { noise: NoiseFunction2D; freq: number; scale: number; seed: number },
 ): [number, number] {
-    let nx = noise(x * freq + offset, y * freq + offset)
-    let ny = noise(x * freq + offset + 123, y * freq + offset + 123)
+    const nx = noise(d * freq, seed)
+    const ny = noise(d * freq, seed + 100)
     return [x + nx * scale, y + ny * scale]
 }
 
-type WobblyRibbonParams = RibbonParams & {
+
+type WobblyRibbonParams = Omit<RibbonParams, 'widths'> & {
     count: number
     freq: number
     scale: number
+    /** noise distance between copies: small = similar copies, large = independent */
     offsetEach: number
     noise: NoiseFunction2D
+    /** stable per-stroke seed, e.g. the stroke's index */
+    seed: number
+    /** 0-1. how much the width swells/thins, e.g. 0.2 = 0.8x to 1.2x */
+    widthVary: number
+    widthFreq: number
 }
 export function getWobblyRibbons(
     pts: [number, number][],
-    { count, freq, scale, offsetEach, noise, ...rest }: WobblyRibbonParams,
+    {
+        count,
+        freq,
+        scale,
+        offsetEach,
+        noise,
+        seed,
+        widthVary,
+        widthFreq,
+        ...rest
+    }: WobblyRibbonParams,
 ) {
     freq = freq / 100
-    let results: Ribbon[] = []
-    while (results.length < count) {
-        // let displacedPts: [number, number][] = []
-        let displaced = pts.map((pt) => {
-            return displacePoint(pt, { freq, scale, noise, offset: results.length * offsetEach })
-        })
-        results.push(getRibbon(displaced, rest))
+    widthFreq = widthFreq / 100
+
+    // distance along the undisplaced path, from the start. A point's distance never
+    // changes as the animated stroke grows, so its noise stays put between frames.
+    const dists: number[] = [0]
+    for (let i = 1; i < pts.length; i++) {
+        const [a, b] = [pts[i - 1], pts[i]]
+        dists.push(dists[i - 1] + Math.hypot(b[0] - a[0], b[1] - a[1]))
+    }
+
+    const results: Ribbon[] = []
+    for (let c = 0; c < count; c++) {
+        const copySeed = seed * 10 + c * offsetEach
+        const displaced = pts.map((pt, i) =>
+            displacePoint(pt, dists[i], { freq, scale, noise, seed: copySeed }),
+        )
+        const widths = dists.map((d) => 1 + noise(d * widthFreq, copySeed + 200) * widthVary)
+        results.push(getRibbon(displaced, { ...rest, widths }))
     }
     return results
 }
