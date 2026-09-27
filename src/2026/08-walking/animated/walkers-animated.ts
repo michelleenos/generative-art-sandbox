@@ -12,10 +12,12 @@ import { Walker } from '../walker'
 import { AnimPath, buildAnimPaths, PathAnimator, ScheduleOptions, Stroke } from './walk-animator'
 import { easing, Easing } from '~/helpers/easings'
 import { makePalettesGui } from '~/helpers/gui-palettes'
+import { getRibbon, getWobblyRibbons, smoothDrawRibbon } from '../ribbon'
+import { createNoise2D, NoiseFunction2D } from 'simplex-noise'
 
 const C = {
-    cell: 10,
-    grid: 80,
+    cell: 30,
+    grid: 25,
     patterns: 7,
     maxSteps: 200,
     tileMin: 10,
@@ -23,9 +25,18 @@ const C = {
     walkTogether: true,
     wrap: true,
     patternEven: true,
-    tesselation: true,
-    cornerSmoothTimes: 2,
+    tesselation: false,
+    // centerline smoothing; keep 0 so the ribbon offsets a clean polygon
+    cornerSmoothTimes: 0,
     cornerSmoothAmt: 0.25,
+    // rounds the ribbon's edges after offsetting
+    edgeSmoothTimes: 3,
+    edgeSmoothAmt: 0.25,
+
+    noiseScale: 5,
+    noiseFreq: 0.1,
+    noiseOffsetEach: 5,
+    alpha: 0.3,
 
     clip: false,
     extraCells: 0,
@@ -69,6 +80,7 @@ class Drawing {
     rng!: Rng
     inner!: { cols: number; rows: number; w: number; h: number }
     outer!: { cols: number; rows: number; w: number; h: number }
+    noise!: NoiseFunction2D
     field!: Field
     walkers!: Walker[]
     palette: WalkerPalette
@@ -86,6 +98,7 @@ class Drawing {
         }
         console.log(`SEED: ${this.seed}`)
         this.rng = makeRng(this.seed)
+        this.noise = createNoise2D(this.rng)
 
         const cols = C.grid
         const rows = C.grid
@@ -131,10 +144,26 @@ class Drawing {
         ctx.lineCap = 'round'
         ctx.lineWidth = lw
         strokes.forEach(({ points, color }) => {
-            ctx.strokeStyle = color
-            ctx.beginPath()
-            smoothDrawPath(ctx, points)
-            ctx.stroke()
+            if (points.length < 2) return
+            ctx.fillStyle = color
+            ctx.globalAlpha = C.alpha
+            const ribbons = getWobblyRibbons(points, {
+                strokeWidth: lw,
+                taper: 1,
+                taperLen: 20,
+                taperType: 'symmetric',
+                freq: C.noiseFreq,
+                scale: C.noiseScale,
+                count: 5,
+                noise: this.noise,
+                offsetEach: C.noiseOffsetEach,
+            })
+            ribbons.forEach((ribbon) => {
+                ctx.beginPath()
+                // smoothDrawPath(ctx, points)
+                smoothDrawRibbon(ribbon, ctx, C.edgeSmoothTimes, C.edgeSmoothAmt)
+                ctx.fill()
+            })
         })
 
         ctx.restore()
@@ -209,6 +238,10 @@ f.add(C, 'walkTogether')
 f.add(C, 'patternEven')
 f.add(C, 'tesselation')
 f.add(C, 'wrap')
+f.add(C, 'noiseFreq', 0, 1, 0.001)
+f.add(C, 'noiseScale', 0, 10, 0.1)
+f.add(C, 'noiseOffsetEach', 0, 5, 0.01)
+f.add(C, 'alpha', 0, 1, 0.01)
 f.onChange(() => regenerate(false))
 
 makePalettesGui(gui.addFolder('colors'), drawing.palette, palettes, (pal) => {
