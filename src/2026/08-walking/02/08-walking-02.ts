@@ -32,6 +32,8 @@ const C = {
     wrap: false,
     patternEven: false,
     tesselation: false,
+    interval: 2,
+    tilt: 1 as 1 | 2,
 
     fillSingle: false,
 
@@ -85,6 +87,7 @@ class Drawing {
             tesselation: C.tesselation,
             maxSteps: C.maxSteps,
             wrap: C.wrap,
+            walkerParams: { interval: C.interval, tilt: C.tilt },
         })
 
         if (!C.step) walkAll(this.walkers, C.walkTogether)
@@ -212,6 +215,8 @@ f.add(C, 'walkTogether')
 f.add(C, 'wrap')
 f.add(C, 'patternEven')
 f.add(C, 'tesselation')
+f.add(C, 'interval', 2, 10, 1)
+f.add(C, 'tilt', [1, 2])
 // f.add(C, 'drawGrid')
 // f.add(C, 'clip')
 f.add(C, 'fillSingle')

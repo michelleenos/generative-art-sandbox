@@ -21,7 +21,13 @@ export type WalkerParams = {
     wrap?: boolean
 }
 
-type WalkerCtor<W extends Walker> = new (params: WalkerParams) => W
+type WalkerCtor<W extends Walker, A extends WalkerParams> = new (params: A) => W
+
+/** constructor params beyond the base WalkerParams; required if any extra param is required */
+type ExtraParams<A> = Omit<A, keyof WalkerParams>
+type WalkerParamsOption<A> = {} extends ExtraParams<A>
+    ? { walkerParams?: ExtraParams<A> }
+    : { walkerParams: ExtraParams<A> }
 
 export type InitWalkersOptions = {
     colors: string[]
@@ -35,8 +41,8 @@ export type InitWalkersOptions = {
     wrap: boolean
 }
 
-export function initWalkers<W extends Walker>(
-    Ctor: WalkerCtor<W>,
+export function initWalkers<W extends Walker, A extends WalkerParams>(
+    Ctor: WalkerCtor<W, A>,
     field: Field,
     {
         colors,
@@ -48,7 +54,8 @@ export function initWalkers<W extends Walker>(
         tesselation,
         maxSteps,
         wrap,
-    }: InitWalkersOptions,
+        walkerParams,
+    }: InitWalkersOptions & WalkerParamsOption<A>,
 ): W[] {
     let walkers: W[] = []
     const patternParams = {
@@ -77,13 +84,14 @@ export function initWalkers<W extends Walker>(
             while (ny(y) < field.rows) {
                 if (field.valid(nx(x), ny(y))) {
                     const walker = new Ctor({
+                        ...walkerParams,
                         field,
                         start: [nx(x), ny(y)],
                         startDir: dir,
                         maxSteps,
                         color,
                         wrap,
-                    })
+                    } as A)
                     walker.patternIndex = pi
                     walkers.push(walker)
                 }
