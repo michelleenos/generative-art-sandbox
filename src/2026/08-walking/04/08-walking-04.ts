@@ -8,7 +8,7 @@ import { Sizes } from '~/helpers/sizes'
 import { random, shuffle } from '~/helpers/utils'
 import '~/style.css'
 import { Field } from '../field'
-import { palettes, type WalkerPalette } from '../walker-palettes'
+import { palettes, WalkerPalette } from '../walker-palettes'
 import {
     drawGrid,
     drawPath,
@@ -18,29 +18,35 @@ import {
     walkAll,
     walkStep,
 } from '../walking-utils'
-// import { Walker1 } from './walker1'
-import { Walker } from '../walker'
+import { Walker4 } from './walker4'
 
 const C = {
     cell: 10,
     grid: 80,
-    patterns: 8,
-    maxSteps: 100,
+    patterns: 7,
+    maxSteps: 200,
     tileMin: 10,
-    tileMax: 12,
+    tileMax: 20,
     cornerSmoothTimes: 2,
     cornerSmoothAmt: 0.25,
     extraCells: 0,
-    walkTogether: true,
-    wrap: true,
+    walkTogether: false,
+    wrap: false,
     patternEven: false,
-    tesselation: true,
-    debgShapes: false,
-    drawGrid: false,
-    clip: false,
-    fillSingle: false,
+    tesselation: false,
 
     step: false,
+    holdInterval: 80,
+
+    drawGrid: false,
+    clip: false,
+    debgShapes: false,
+    fillSingle: false,
+
+    minContrastBg: 1,
+    minColors: 2,
+    bgColorType: 'light' as 'light' | 'dark' | 'edge',
+    bgEdge: 10,
 }
 
 class Drawing {
@@ -49,7 +55,7 @@ class Drawing {
     inner!: { cols: number; rows: number; w: number; h: number }
     outer!: { cols: number; rows: number; w: number; h: number }
     field!: Field
-    walkers!: Walker[]
+    walkers!: Walker4[]
     palette: WalkerPalette
 
     constructor(palette: WalkerPalette, seed?: number) {
@@ -65,6 +71,7 @@ class Drawing {
         }
         console.log(`SEED: ${this.seed}`)
         this.rng = makeRng(this.seed)
+        const walkerSeed = makeRandomSeed(this.rng)
 
         const cols = C.grid
         const rows = C.grid
@@ -76,7 +83,7 @@ class Drawing {
 
         this.field = new Field(oCols, oRows)
         const colors = shuffle([...this.palette.colors], makeRng(makeRandomSeed(this.rng)))
-        this.walkers = initWalkers(Walker, this.field, {
+        this.walkers = initWalkers(Walker4, this.field, {
             colors,
             rng: this.rng,
             count: C.patterns,
@@ -86,6 +93,9 @@ class Drawing {
             tesselation: C.tesselation,
             maxSteps: C.maxSteps,
             wrap: C.wrap,
+            walkerParams: {
+                seed: walkerSeed,
+            },
         })
 
         if (!C.step) walkAll(this.walkers, C.walkTogether)
@@ -97,6 +107,7 @@ class Drawing {
             cornerSmoothTimes: C.cornerSmoothTimes,
             cornerSmoothAmt: C.cornerSmoothAmt,
         })
+        const lw = C.cell * 0.7
         ctx.fillStyle = this.palette.bg
         ctx.fillRect(0, 0, sizes.width, sizes.height)
 
@@ -114,7 +125,6 @@ class Drawing {
         ctx.translate((this.inner.w - this.outer.w) / 2, (this.inner.h - this.outer.h) / 2)
         ctx.translate(C.cell / 2, C.cell / 2)
         ctx.lineCap = 'round'
-
         withPaths.forEach(({ walker, paths }) => {
             ctx.strokeStyle = walker.color
             ctx.fillStyle = walker.color
@@ -122,7 +132,7 @@ class Drawing {
             paths.forEach((path) => {
                 if (path.length === 1 && C.fillSingle) {
                     ctx.beginPath()
-                    ctx.arc(path[0][0], path[0][1], ctx.lineWidth / 2, 0, Math.PI * 2)
+                    ctx.arc(path[0][0], path[0][1], lw / 2, 0, Math.PI * 2)
                     ctx.fill()
                 }
                 if (C.debgShapes) {
@@ -138,7 +148,7 @@ class Drawing {
                     drawPath(ctx, path)
                     ctx.stroke()
                 } else {
-                    ctx.lineWidth = C.cell * 0.7
+                    ctx.lineWidth = lw
                     ctx.beginPath()
                     smoothDrawPath(ctx, path)
                     ctx.stroke()
@@ -150,14 +160,21 @@ class Drawing {
     }
 }
 
+function doStep() {
+    walkStep(drawing.walkers, C.walkTogether)
+    drawing.draw(ctx, sizes)
+}
+
 /**
  * Setup
  */
 
+let palette = random(palettes)
+
 const sizes = new Sizes()
 const { ctx, resizeCanvas, canvas } = createCanvas(sizes.width, sizes.height)
 
-const drawing = new Drawing(random(palettes), 460012768)
+const drawing = new Drawing(palette, 853089607)
 drawing.draw(ctx, sizes)
 
 sizes.on('resize', (width, height) => {
@@ -169,10 +186,6 @@ if (C.step) {
     walkStep(drawing.walkers, C.walkTogether)
 }
 
-const doStep = () => {
-    walkStep(drawing.walkers, C.walkTogether)
-    drawing.draw(ctx, sizes)
-}
 clickAndHold({
     el: canvas,
     fn: () => {
@@ -199,10 +212,10 @@ gui.add(
     'newSeed',
 )
 const f = gui.addFolder('drawing')
-f.add(C, 'cell', 3, 40, 1)
-f.add(C, 'grid', 20, 150, 1)
+f.add(C, 'grid', 20, 250, 1)
+f.add(C, 'cell', 5, 20, 1)
 f.add(C, 'patterns', 1, 20, 1)
-f.add(C, 'maxSteps', 2, 1000, 1)
+f.add(C, 'maxSteps', 2, 2000, 1)
 f.add(C, 'tileMin', 2, 50, 1)
 f.add(C, 'tileMax', 2, 50, 1)
 f.add(C, 'walkTogether')
@@ -224,7 +237,7 @@ gui.add(C, 'step').onChange(() => {
 
 gui.add(
     {
-        saveCanvas: () => {
+        save: () => {
             let name = `walking08-${drawing.seed}-gr${C.grid}-p${C.patterns}-st${C.maxSteps}-${C.tileMin}-${C.tileMax}`
             let flags = ''
 
@@ -252,7 +265,7 @@ gui.add(
             })
         },
     },
-    'saveCanvas',
+    'save',
 )
 
 const cf = gui.addFolder('colors')
@@ -271,3 +284,14 @@ f.onChange((e) => {
         console.warn(e)
     }
 })
+
+// @ts-ignore
+window.debg = {
+    drawing,
+    ctx,
+    canvas,
+    sizes,
+    getFinalPaths,
+    C,
+    walkStep,
+}

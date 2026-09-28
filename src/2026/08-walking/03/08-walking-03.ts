@@ -167,12 +167,12 @@ function doStep() {
  */
 
 // let palette = random(palettes)
-let palette = palettes[5]
+let palette = palettes[8]
 
 const sizes = new Sizes()
 const { ctx, resizeCanvas, canvas } = createCanvas(sizes.width, sizes.height)
 
-const drawing = new Drawing(palette, 1581781986)
+const drawing = new Drawing(palette, 853089607)
 drawing.draw(ctx, sizes)
 
 sizes.on('resize', (width, height) => {
@@ -210,7 +210,8 @@ gui.add(
     'newSeed',
 )
 const f = gui.addFolder('drawing')
-f.add(C, 'grid', 20, 150, 1)
+f.add(C, 'grid', 20, 250, 1)
+f.add(C, 'cell', 5, 20, 1)
 f.add(C, 'patterns', 1, 20, 1)
 f.add(C, 'maxSteps', 2, 2000, 1)
 f.add(C, 'tileMin', 2, 50, 1)

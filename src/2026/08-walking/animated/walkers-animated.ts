@@ -8,7 +8,6 @@ import { initWalkers, smoothDrawPath, walkAll } from '../walking-utils'
 import { Field } from '../field'
 import { shuffle } from '~/helpers/utils'
 import { Walker3 } from '../03/walker3'
-import { Walker2 } from '../02/walker2'
 import { Walker } from '../walker'
 import { AnimPath, buildAnimPaths, PathAnimator, ScheduleOptions, Stroke } from './walk-animator'
 import { easing, Easing } from '~/helpers/easings'
@@ -98,7 +97,7 @@ class Drawing {
 
         this.field = new Field(oCols, oRows)
         const colors = shuffle([...this.palette.colors], makeRng(makeRandomSeed(this.rng)))
-        this.walkers = initWalkers(Walker2, this.field, {
+        this.walkers = initWalkers(Walker3, this.field, {
             colors,
             rng: this.rng,
             count: C.patterns,

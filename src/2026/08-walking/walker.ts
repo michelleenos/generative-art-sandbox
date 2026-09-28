@@ -25,6 +25,7 @@ export class Walker {
     maxSteps: number
     wrap: boolean
     color: string
+    rotations = 0
     /** a meta field only used for animation atm. set by {@link initWalkers} */
     patternIndex = -1
 
@@ -109,7 +110,15 @@ export class Walker {
      * Default behavior is to rotate clockwise.
      * */
     rotate() {
+        this.clockwise()
+    }
+
+    clockwise() {
         this.dir = ((this.dir + 1) % 4) as SquareDir
+    }
+
+    counterClockwise() {
+        this.dir = this.dir === 0 ? 3 : ((this.dir - 1) as SquareDir)
     }
 
     /**
@@ -123,13 +132,14 @@ export class Walker {
         this.beforeStep()
         let next = this.getNext()
         let valid = this.field.valid(...next.xy)
-        let rotates = 0
-        while (!valid && rotates < 3) {
+        this.rotations = 0
+        while (!valid && this.rotations < 3) {
             this.rotate()
             next = this.getNext()
             valid = this.field.valid(...next.xy)
-            rotates++
+            this.rotations++
         }
+        this.rotations = 0
 
         if (!valid) {
             this.done = true

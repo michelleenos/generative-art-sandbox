@@ -1,3 +1,7 @@
+import { cubicBezier, diverging, ramp, sequential } from 'cusphanger'
+import { oklchSrgb } from 'nutelch'
+import { bezierEasings } from '~/helpers/easing-bezier'
+
 export const palettes = [
     {
         bg: '#fcf7ea',
@@ -111,5 +115,69 @@ export const palettes = [
         name: 'pearly-0',
     },
 ]
+
+palettes.push(
+    ...[
+        {
+            vals: ramp({
+                hStart: 260,
+                total: 7,
+                hCycles: -0.3,
+                hStartCenter: 0.3,
+                sRange: [0.3, 0.7],
+                lRange: [0.4, 0.78],
+                coolWarm: 0.5,
+                triangleMode: 'avg',
+                // lEasing: cubicBezier(...bezierEasings.inOutCirc),
+                hEasing: cubicBezier(...bezierEasings.inQuart),
+                lut: oklchSrgb,
+            }),
+            name: 'blurpleramp',
+        },
+        // {
+        //     vals: ramp({
+        //         hStart: 22,
+        //         total: 7,
+        //         hCycles: 0.5,
+        //         hStartCenter: 0.71,
+        //         sRange: [0.4, 0.9],
+        //         lRange: [0.36, 0.8],
+        //         coolWarm: 0,
+        //         triangleMode: 'perHue',
+        //         // hEasing: cubicBezier(...bezierEasings.inOutQuart),
+        //         lEasing: cubicBezier(0.4, 0.41, 0.64, 0.66),
+        //         lut: oklchSrgb,
+        //     }),
+        //     name: 'ramp2',
+        // },
+        {
+            vals: diverging({
+                hStart: 22,
+                hEnd: 183,
+                total: 6,
+                saturation: 0.58,
+                // brightness: 0.8,
+                contrast: 0.8,
+                coolWarm: 1,
+                lRange: [0.45, 0.9],
+                // lEasing: cubicBezier(0.54, 0.29, 0.77, 0.68),
+                lEasing: cubicBezier(...bezierEasings.inSine),
+                lut: oklchSrgb,
+            }),
+
+            bg: '#ffffff',
+            name: 'fall-div',
+        },
+    ].map((pal) => {
+        let colors = pal.vals.map((val) => `oklch(${val.l} ${val.c} ${val.h})`)
+        const bg = pal.bg || `color-mix(in oklch, ${colors[colors.length - 1]} 7%, white)`
+
+        return {
+            bg,
+            colors,
+            name: pal.name,
+        }
+    }),
+)
 
 export type WalkerPalette = (typeof palettes)[number]

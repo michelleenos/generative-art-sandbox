@@ -19,6 +19,9 @@ import {
     walkStep,
 } from '../walking-utils'
 import { Walker2 } from './walker2'
+import { cubicBezier, ramp, sequential } from 'cusphanger'
+import { lchuvSrgb, oklchSrgb } from 'nutelch'
+import { bezierEasings } from '~/helpers/easing-bezier'
 
 const C = {
     cell: 10,
@@ -43,6 +46,42 @@ const C = {
 
     step: false,
 }
+
+// const pal = sequential({
+//     hStart: 260,
+//     total: 9,
+//     saturation: 0.6,
+//     brightness: 0.75,
+//     contrast: 0.88,
+//     lut: oklchSrgb,
+// })
+// const pal = ramp({
+//     hStart: 200,
+//     total: 5,
+//     hCycles: -0.6,
+//     hStartCenter: 0.31,
+//     sRange: [0.54, 0.83],
+//     lRange: [0.39, 0.7],
+//     coolWarm: 0.43,
+//     triangleMode: 'avg',
+//     // hEasing: cubicBezier(0.9, 0, 0.1, 1),
+//     lEasing: cubicBezier(0.41, 0.41, 0.58, 0.59),
+//     lut: oklchSrgb,
+// })
+
+const pal = ramp({
+    hStart: 260,
+    total: 7,
+    hCycles: -0.3,
+    hStartCenter: 0.3,
+    sRange: [0.3, 0.7],
+    lRange: [0.4, 0.78],
+    coolWarm: 0.5,
+    triangleMode: 'avg',
+    // lEasing: cubicBezier(...bezierEasings.inOutCirc),
+    hEasing: cubicBezier(...bezierEasings.inQuart),
+    lut: oklchSrgb,
+})
 
 class Drawing {
     seed!: number
@@ -161,7 +200,15 @@ function doStep() {
  * Setup
  */
 
-let palette = palettes[0]
+let palette = palettes[8]
+
+// let colors = pal.map((val) => `oklch(${val.l} ${val.c} ${val.h})`)
+// const bg = `color-mix(in oklch, ${colors[colors.length - 1]} 10%, white)`
+// let palette = {
+//     bg,
+//     colors,
+//     name: '',
+// }
 
 const sizes = new Sizes()
 const { ctx, resizeCanvas, canvas } = createCanvas(sizes.width, sizes.height)
@@ -264,7 +311,7 @@ gui.add(
 )
 
 const cf = gui.addFolder('colors')
-const palGui = makePalettesGui(cf, drawing.palette, palettes, (pal) => {
+makePalettesGui(cf, drawing.palette, palettes, (pal) => {
     drawing.palette = pal
     drawing.generate(false)
     drawing.draw(ctx, sizes)
