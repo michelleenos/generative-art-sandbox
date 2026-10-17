@@ -18,7 +18,7 @@ import {
     walkAll,
     walkStep,
 } from '../walking-utils'
-import { Walker2 } from './walker2'
+import { Walker2 } from '../walkers/walker2'
 import { cubicBezier, ramp, sequential } from 'cusphanger'
 import { lchuvSrgb, oklchSrgb } from 'nutelch'
 import { bezierEasings } from '~/helpers/easing-bezier'

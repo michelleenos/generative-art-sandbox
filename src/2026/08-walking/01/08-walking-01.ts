@@ -19,7 +19,7 @@ import {
     walkStep,
 } from '../walking-utils'
 // import { Walker1 } from './walker1'
-import { Walker } from '../walker'
+import { Walker } from '../walkers/walker-base'
 
 const C = {
     cell: 10,

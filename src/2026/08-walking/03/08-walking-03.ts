@@ -19,7 +19,7 @@ import {
     walkAll,
     walkStep,
 } from '../walking-utils'
-import { Walker3 } from './walker3'
+import { Walker3 } from '../walkers/walker3'
 
 const C = {
     cell: 10,

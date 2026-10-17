@@ -1,7 +1,7 @@
-import type { XY } from './walking-utils'
-import { Field } from './field'
-import { SquareDir, squareDirs } from './walk-directions'
-import type { initWalkers } from './walking-utils'
+import type { XY } from '../walking-utils'
+import { Field } from '../field'
+import { SquareDir, squareDirs } from '../walk-directions'
+import type { initWalkers } from '../walking-utils'
 
 type WalkerStep = {
     xy: XY

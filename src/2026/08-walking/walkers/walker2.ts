@@ -1,5 +1,5 @@
 import { SquareDir } from '../walk-directions'
-import { Walker } from '../walker'
+import { Walker } from './walker-base'
 import { WalkerParams } from '../walking-utils'
 
 type Walker2Params = WalkerParams & {
