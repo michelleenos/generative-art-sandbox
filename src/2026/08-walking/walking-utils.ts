@@ -2,34 +2,12 @@ import { chaikinSmoothTuple } from '~/helpers/chaikin-smooth'
 import { Rng } from '~/helpers/prng'
 import { Field } from './field'
 import { createPatterns, createTessPatterns } from './patterns'
-import { SquareDir } from './walk-directions'
-import { Walker } from './walker'
-
-export type XY = [number, number]
-
-// export interface Walker {
-//     done: boolean
-//     walk: () => void
-// }
-
-export type WalkerParams = {
-    field: Field
-    start: XY
-    maxSteps: number
-    color: string
-    startDir: SquareDir
-    wrap?: boolean
-}
-
-type WalkerCtor<W extends Walker, A extends WalkerParams> = new (params: A) => W
-
-/** constructor params beyond the base WalkerParams; required if any extra param is required */
-type ExtraParams<A> = Omit<A, keyof WalkerParams>
-type WalkerParamsOption<A> = {} extends ExtraParams<A>
-    ? { walkerParams?: ExtraParams<A> }
-    : { walkerParams: ExtraParams<A> }
+import { Walker } from './walkers/walker-base'
+import { WalkerParams } from './walkers/walker-base'
+import { type XY } from '~/_types'
 
 export type InitWalkersOptions = {
+    field: Field
     colors: string[]
     rng: Rng
     count: number
@@ -41,21 +19,20 @@ export type InitWalkersOptions = {
     wrap: boolean
 }
 
-export function initWalkers<W extends Walker, A extends WalkerParams>(
-    Ctor: WalkerCtor<W, A>,
-    field: Field,
+export function initWalkers<W extends Walker>(
     {
-        colors,
+        field,
         rng,
+        colors,
+        maxSteps,
+        wrap,
         count,
         tileMin,
         tileMax,
         patternEven,
         tesselation,
-        maxSteps,
-        wrap,
-        walkerParams,
-    }: InitWalkersOptions & WalkerParamsOption<A>,
+    }: InitWalkersOptions,
+    makeWalker: (params: WalkerParams) => W,
 ): W[] {
     let walkers: W[] = []
     const patternParams = {
@@ -83,15 +60,14 @@ export function initWalkers<W extends Walker, A extends WalkerParams>(
             let y = 0
             while (ny(y) < field.rows) {
                 if (field.valid(nx(x), ny(y))) {
-                    const walker = new Ctor({
-                        ...walkerParams,
+                    const walker = makeWalker({
                         field,
                         start: [nx(x), ny(y)],
                         startDir: dir,
                         maxSteps,
                         color,
                         wrap,
-                    } as A)
+                    })
                     walker.patternIndex = pi
                     walkers.push(walker)
                 }

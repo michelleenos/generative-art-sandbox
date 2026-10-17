@@ -83,20 +83,21 @@ class Drawing {
 
         this.field = new Field(oCols, oRows)
         const colors = shuffle([...this.palette.colors], makeRng(makeRandomSeed(this.rng)))
-        this.walkers = initWalkers(Walker4, this.field, {
-            colors,
-            rng: this.rng,
-            count: C.patterns,
-            tileMin: C.tileMin,
-            tileMax: C.tileMax,
-            patternEven: C.patternEven,
-            tesselation: C.tesselation,
-            maxSteps: C.maxSteps,
-            wrap: C.wrap,
-            walkerParams: {
-                seed: walkerSeed,
+        this.walkers = initWalkers(
+            {
+                field: this.field,
+                colors,
+                rng: this.rng,
+                count: C.patterns,
+                tileMin: C.tileMin,
+                tileMax: C.tileMax,
+                patternEven: C.patternEven,
+                tesselation: C.tesselation,
+                maxSteps: C.maxSteps,
+                wrap: C.wrap,
             },
-        })
+            (p) => new Walker4(p, { seed: walkerSeed }),
+        )
 
         if (!C.step) walkAll(this.walkers, C.walkTogether)
     }

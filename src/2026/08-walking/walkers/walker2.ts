@@ -1,8 +1,9 @@
 import { SquareDir } from '../walk-directions'
 import { Walker } from './walker-base'
-import { WalkerParams } from '../walking-utils'
+// import { WalkerParams } from '../walking-utils'
+import { WalkerParams } from './walker-base'
 
-type Walker2Params = WalkerParams & {
+type Walker2Params = {
     /**
      * how often to oscillate directions. defaults to 2 (every other step).
      */
@@ -12,12 +13,13 @@ type Walker2Params = WalkerParams & {
      */
     tilt?: 1 | 2
 }
+
 export class Walker2 extends Walker {
     state: { dirStep: 1 | 2 }
     interval: number
     tilt: number
 
-    constructor({ interval = 2, tilt = 1, ...params }: Walker2Params) {
+    constructor(params: WalkerParams, { interval = 2, tilt = 1 }: Walker2Params = {}) {
         super(params)
         this.interval = interval
         this.tilt = tilt

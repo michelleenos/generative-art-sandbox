@@ -1,9 +1,10 @@
 import { makeRng, Rng } from '~/helpers/prng'
 import { SquareDir } from '../walk-directions'
 import { Walker } from './walker-base'
-import { WalkerParams } from '../walking-utils'
+// import { WalkerParams } from '../walking-utils'
+import { WalkerParams } from './walker-base'
 
-type Walker4Params = WalkerParams & {
+type Walker4Params = {
     seed: number | (() => number)
 }
 
@@ -15,7 +16,7 @@ export class Walker4 extends Walker {
         turn: 'cc',
     }
 
-    constructor({ seed, ...params }: Walker4Params) {
+    constructor(params: WalkerParams, { seed }: Walker4Params) {
         super(params)
         this.rng = typeof seed === 'number' ? makeRng(seed) : makeRng(seed())
     }
@@ -56,17 +57,6 @@ export class Walker4 extends Walker {
             this.resetTurn(false)
         }
     }
-
-    // rotate() {
-    //     if (this.state.nextTurn === 'left') {
-    //         this.dir = this.dir === 0 ? 3 : ((this.dir - 1) as SquareDir)
-    //         this.state.nextTurn = 'right'
-    //     } else {
-    //         this.dir = ((this.dir + 1) % 4) as SquareDir
-    //         this.state.nextTurn = 'left'
-    //     }
-    // }
-
     afterStep() {
         this.state.turnChance = Math.min(1, this.state.turnChance + 0.01)
     }

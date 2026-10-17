@@ -1,6 +1,7 @@
 import { SquareDir } from '../walk-directions'
 import { Walker } from './walker-base'
-import { WalkerParams } from '../walking-utils'
+// import { WalkerParams } from '../walking-utils'
+import { WalkerParams } from './walker-base'
 
 export class Walker3 extends Walker {
     len1 = 6

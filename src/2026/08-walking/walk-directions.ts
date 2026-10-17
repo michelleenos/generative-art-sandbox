@@ -1,4 +1,4 @@
-import { XY } from './walking-utils'
+import { type XY } from '~/_types'
 
 export type SquareDir = 0 | 1 | 2 | 3
 

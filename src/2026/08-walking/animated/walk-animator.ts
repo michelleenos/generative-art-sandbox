@@ -1,5 +1,5 @@
 import { chaikinSmoothTuple } from '~/helpers/chaikin-smooth'
-import type { XY } from '../walking-utils'
+import { type XY } from '~/_types'
 
 /**
  * One animatable stroke (one continuous pen segment), smoothed and scaled to px.

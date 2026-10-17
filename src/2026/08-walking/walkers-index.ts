@@ -1,0 +1,243 @@
+import { makeRandomSeed, makeRng, Rng } from '~/helpers/prng'
+import { Sizes } from '~/helpers/sizes'
+import { random, shuffle } from '~/helpers/utils'
+import '~/style.css'
+import { Field } from './field'
+import { palettes, WalkerPalette } from './walker-palettes'
+import walkers from './walkers'
+// import { Walker } from './walkers/walker-base'
+import { getFinalPaths, initWalkers, smoothDrawPath, walkAll } from './walking-utils'
+import createCanvas from '~/helpers/create-canvas'
+import { GuiExtra } from '~/helpers/gui/lilgui-extra'
+import { saveCanvasAtCoords } from '~/helpers/canvas-save-image'
+import { makePalettesGui } from '~/helpers/gui-palettes'
+import { Walker } from './walkers/walker-base'
+
+const C = {
+    cell: 10,
+    grid: 80,
+    patterns: 7,
+    maxSteps: 200,
+    tileMin: 10,
+    tileMax: 20,
+    walkTogether: false,
+    wrap: false,
+    patternEven: false,
+    tesselation: false,
+    type: 1 as keyof typeof walkers,
+
+    cornerSmoothTimes: 2,
+    cornerSmoothAmt: 0.25,
+
+    clip: false,
+    extraCells: 0,
+    step: false,
+    holdInterval: 80,
+
+    fillSingle: false,
+}
+
+class Drawing {
+    seed!: number
+    rng!: Rng
+    inner!: { cols: number; rows: number; w: number; h: number }
+    outer!: { cols: number; rows: number; w: number; h: number }
+    field!: Field
+    walkers!: Walker[]
+    palette: WalkerPalette
+
+    constructor(palette: WalkerPalette, seed?: number) {
+        this.palette = palette
+        this.generate(seed)
+    }
+
+    generate(seed: number | boolean = true) {
+        if (typeof seed === 'number') {
+            this.seed = seed
+        } else if (seed === true) {
+            this.seed = makeRandomSeed()
+        }
+        console.log(`SEED: ${this.seed}`)
+        this.rng = makeRng(this.seed)
+        const walkerSeed = makeRandomSeed(this.rng)
+
+        const cols = C.grid
+        const rows = C.grid
+        this.inner = { cols, rows, w: cols * C.cell, h: rows * C.cell }
+
+        const oCols = cols + C.extraCells
+        const oRows = rows + C.extraCells
+        this.outer = { cols: oCols, rows: oRows, w: oCols * C.cell, h: oRows * C.cell }
+
+        this.field = new Field(oCols, oRows)
+        const colors = shuffle([...this.palette.colors], makeRng(makeRandomSeed(this.rng)))
+
+        this.walkers = initWalkers(
+            {
+                colors,
+                field: this.field,
+                rng: this.rng,
+                count: C.patterns,
+                tileMin: C.tileMin,
+                tileMax: C.tileMax,
+                patternEven: C.patternEven,
+                tesselation: C.tesselation,
+                maxSteps: C.maxSteps,
+                wrap: C.wrap,
+            },
+            (p) => {
+                switch (C.type) {
+                    case 1:
+                        return new walkers[1](p)
+                    case 2:
+                        return new walkers[2](p, { interval: 2, tilt: 1 })
+                    case 3:
+                        return new walkers[3](p)
+                    case 4:
+                        return new walkers[4](p, { seed: walkerSeed })
+                }
+            },
+        )
+
+        walkAll(this.walkers, C.walkTogether)
+    }
+
+    draw(ctx: CanvasRenderingContext2D, sizes: Sizes) {
+        let withPaths = getFinalPaths(this.walkers, {
+            cell: C.cell,
+            cornerSmoothTimes: C.cornerSmoothTimes,
+            cornerSmoothAmt: C.cornerSmoothAmt,
+        })
+        const lw = C.cell * 0.7
+        ctx.fillStyle = this.palette.bg
+        ctx.fillRect(0, 0, sizes.width, sizes.height)
+
+        ctx.save()
+        ctx.translate((sizes.width - this.inner.w) / 2, (sizes.height - this.inner.h) / 2)
+
+        if (C.clip) {
+            ctx.beginPath()
+            ctx.rect(0, 0, this.inner.w, this.inner.h)
+            ctx.clip()
+        }
+
+        ctx.translate((this.inner.w - this.outer.w) / 2, (this.inner.h - this.outer.h) / 2)
+        ctx.translate(C.cell / 2, C.cell / 2)
+        ctx.lineCap = 'round'
+        withPaths.forEach(({ walker, paths }) => {
+            ctx.strokeStyle = walker.color
+            ctx.fillStyle = walker.color
+
+            paths.forEach((path) => {
+                if (path.length === 1 && C.fillSingle) {
+                    ctx.beginPath()
+                    ctx.arc(path[0][0], path[0][1], lw / 2, 0, Math.PI * 2)
+                    ctx.fill()
+                }
+
+                ctx.lineWidth = lw
+                ctx.beginPath()
+                smoothDrawPath(ctx, path)
+                ctx.stroke()
+            })
+        })
+
+        ctx.restore()
+    }
+}
+
+/**
+ * Setup
+ */
+
+let palette = random(palettes)
+
+const sizes = new Sizes()
+const { ctx, resizeCanvas, canvas } = createCanvas(sizes.width, sizes.height)
+
+const drawing = new Drawing(palette, makeRandomSeed())
+drawing.draw(ctx, sizes)
+
+sizes.on('resize', (width, height) => {
+    resizeCanvas(width, height)
+    drawing.draw(ctx, sizes)
+})
+
+/**
+ * GUI
+ */
+
+const gui = new GuiExtra()
+gui.add(drawing, 'seed').listen()
+gui.add(
+    {
+        newSeed: () => {
+            drawing.generate(true)
+            drawing.draw(ctx, sizes)
+        },
+    },
+    'newSeed',
+)
+const f = gui.addFolder('drawing')
+f.add(C, 'type', [1, 2, 3, 4])
+f.add(C, 'grid', 20, 250, 1)
+f.add(C, 'cell', 5, 20, 1)
+f.add(C, 'patterns', 1, 20, 1)
+f.add(C, 'maxSteps', 2, 2000, 1)
+f.add(C, 'tileMin', 2, 50, 1)
+f.add(C, 'tileMax', 2, 50, 1)
+f.add(C, 'walkTogether')
+f.add(C, 'wrap')
+f.add(C, 'patternEven')
+f.add(C, 'tesselation')
+f.add(C, 'fillSingle')
+
+gui.add(
+    {
+        save: () => {
+            let name = `w${C.type}-${drawing.seed}-gr${C.grid}-p${C.patterns}-st${C.maxSteps}-${C.tileMin}-${C.tileMax}`
+            let flags = ''
+
+            if (C.walkTogether) flags += 't'
+            if (C.wrap) flags += 'w'
+            if (C.patternEven) flags += 'e'
+            if (C.tesselation) flags += 's'
+            name += `-${flags}`
+
+            let { inner } = drawing
+            let pr = Math.min(window.devicePixelRatio, 2)
+            let margin = 20 * pr
+            let sx = ((sizes.width - inner.w) / 2) * pr - margin
+            let sy = ((sizes.height - inner.h) / 2) * pr - margin
+            let sw = inner.w * pr + margin * 2
+            let sh = inner.h * pr + margin * 2
+            saveCanvasAtCoords(canvas, {
+                sx,
+                sy,
+                sw,
+                sh,
+                fileName: name,
+                type: 'png',
+                quality: 0.95,
+            })
+        },
+    },
+    'save',
+)
+
+const cf = gui.addFolder('colors')
+makePalettesGui(cf, drawing.palette, palettes, (pal) => {
+    drawing.palette = pal
+    drawing.generate(false)
+    drawing.draw(ctx, sizes)
+})
+
+f.onChange((e) => {
+    try {
+        ctx.clearRect(0, 0, sizes.width, sizes.height)
+        drawing.generate(false)
+        drawing.draw(ctx, sizes)
+    } catch (e) {
+        console.warn(e)
+    }
+})

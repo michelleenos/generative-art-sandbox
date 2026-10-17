@@ -1,4 +1,4 @@
-import type { XY } from '../walking-utils'
+import type { XY } from '~/_types'
 import { Field } from '../field'
 import { SquareDir, squareDirs } from '../walk-directions'
 import type { initWalkers } from '../walking-utils'
@@ -56,13 +56,6 @@ export class Walker {
      */
     get curSteps() {
         return this.segments.reduce((acc, s) => acc + Math.max(0, s.length - 1), 0)
-        // if (this.segments.length === 1) return this.segments[0].length
-        // let count = 0
-        // let segmentsCount = this.segments.length
-        // this.segments.forEach((segment, i) => {
-        //     count += i === 0 || i === segmentsCount - 1 ? segment.length - 1 : segment.length - 2
-        // })
-        // return count
     }
 
     add(step: WalkerStep) {
