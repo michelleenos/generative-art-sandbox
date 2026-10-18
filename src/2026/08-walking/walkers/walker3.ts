@@ -3,13 +3,21 @@ import { Walker } from './walker-base'
 // import { WalkerParams } from '../walking-utils'
 import { WalkerParams } from './walker-base'
 
+export type Walker3Params = {
+    /** @default 6 */
+    len1?: number
+    /** @default 4 */
+    len2?: number
+}
 export class Walker3 extends Walker {
-    len1 = 6
-    len2 = 4
+    len1: number
+    len2: number
     state: { curCount: number; nextTurn: 'left' | 'right'; nextLen: number }
 
-    constructor(params: WalkerParams) {
+    constructor(params: WalkerParams, { len1 = 6, len2 = 4 }: Walker3Params = {}) {
         super(params)
+        this.len1 = len1
+        this.len2 = len2
         this.state = { curCount: 0, nextTurn: 'left', nextLen: this.len1 }
     }
 

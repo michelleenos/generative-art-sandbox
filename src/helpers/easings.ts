@@ -28,6 +28,15 @@ export const easing = {
             : (Math.sqrt(1 - Math.pow(-2 * x + 2, 2)) + 1) / 2,
     outSquareRoot: (x: number) => Math.sqrt(x),
     inSquareRoot: (x: number) => 1 - Math.sqrt(1 - x),
+    inOutExpo: (x: number) => {
+        return x === 0
+            ? 0
+            : x === 1
+              ? 1
+              : x < 0.5
+                ? Math.pow(2, 20 * x - 10) / 2
+                : (2 - Math.pow(2, -20 * x + 10)) / 2
+    },
     linear: (x: number) => x,
     inBack: (x: number, mag = 1.70158) => {
         return x * x * ((mag + 1) * x - mag)
@@ -96,6 +105,44 @@ export const easing = {
                 0.5 +
             1
         )
+    },
+}
+
+export const easingsNested = {
+    sine: {
+        in: easing.inSine,
+        out: easing.outSine,
+        inOut: easing.inOutSine,
+    },
+    quad: {
+        in: easing.inQuad,
+        out: easing.outQuad,
+        inOut: easing.inOutQuad,
+    },
+    cubic: {
+        in: easing.inCubic,
+        out: easing.outCubic,
+        inOut: easing.inOutCubic,
+    },
+    quart: {
+        in: easing.inQuart,
+        out: easing.outQuart,
+        inOut: easing.inOutQuart,
+    },
+    quint: {
+        in: easing.inQuint,
+        out: easing.outQuint,
+        inOut: easing.inOutQuint,
+    },
+    expo: {
+        in: easing.inExpo,
+        out: easing.outExpo,
+        inOut: easing.inOutExpo,
+    },
+    circ: {
+        in: easing.inCirc,
+        out: easing.outCirc,
+        inOut: easing.inOutCirc,
     },
 }
 

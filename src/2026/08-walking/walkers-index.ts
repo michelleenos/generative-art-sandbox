@@ -1,17 +1,18 @@
+import '~/style.css'
+import { saveCanvasAtCoords } from '~/helpers/canvas-save-image'
+import createCanvas from '~/helpers/create-canvas'
+import { makePalettesGui } from '~/helpers/gui-palettes'
+import { GuiExtra } from '~/helpers/gui/lilgui-extra'
 import { makeRandomSeed, makeRng, Rng } from '~/helpers/prng'
 import { Sizes } from '~/helpers/sizes'
 import { random, shuffle } from '~/helpers/utils'
-import '~/style.css'
 import { Field } from './field'
 import { palettes, WalkerPalette } from './walker-palettes'
 import walkers from './walkers'
-// import { Walker } from './walkers/walker-base'
-import { getFinalPaths, initWalkers, smoothDrawPath, walkAll } from './walking-utils'
-import createCanvas from '~/helpers/create-canvas'
-import { GuiExtra } from '~/helpers/gui/lilgui-extra'
-import { saveCanvasAtCoords } from '~/helpers/canvas-save-image'
-import { makePalettesGui } from '~/helpers/gui-palettes'
 import { Walker } from './walkers/walker-base'
+import { Walker2Params } from './walkers/walker2'
+import { getFinalPaths, initWalkers, smoothDrawPath, walkAll } from './walking-utils'
+import { Walker3Params } from './walkers/walker3'
 
 const C = {
     cell: 10,
@@ -35,6 +36,16 @@ const C = {
     holdInterval: 80,
 
     fillSingle: false,
+
+    w2: {
+        interval: 2,
+        tilt: 1,
+    } as Required<Walker2Params>,
+
+    w3: {
+        len1: 6,
+        len2: 4,
+    } as Required<Walker3Params>,
 }
 
 class Drawing {
@@ -90,9 +101,9 @@ class Drawing {
                     case 1:
                         return new walkers[1](p)
                     case 2:
-                        return new walkers[2](p, { interval: 2, tilt: 1 })
+                        return new walkers[2](p, C.w2)
                     case 3:
-                        return new walkers[3](p)
+                        return new walkers[3](p, C.w3)
                     case 4:
                         return new walkers[4](p, { seed: walkerSeed })
                 }
@@ -179,7 +190,7 @@ gui.add(
     'newSeed',
 )
 const f = gui.addFolder('drawing')
-f.add(C, 'type', [1, 2, 3, 4])
+f.add(C, 'type', [1, 2, 3, 4]).onChange(onTypeChange)
 f.add(C, 'grid', 20, 250, 1)
 f.add(C, 'cell', 5, 20, 1)
 f.add(C, 'patterns', 1, 20, 1)
@@ -191,6 +202,19 @@ f.add(C, 'wrap')
 f.add(C, 'patternEven')
 f.add(C, 'tesselation')
 f.add(C, 'fillSingle')
+
+const fw2 = gui.addFolder('Walker2')
+fw2.add(C.w2, 'interval', 1, 10, 1)
+fw2.add(C.w2, 'tilt', [1, 2])
+
+const fw3 = gui.addFolder('Walker3')
+fw3.add(C.w3, 'len1', 1, 20, 1)
+fw3.add(C.w3, 'len2', 1, 20, 1)
+
+const fConfigs: { [key: number]: GuiExtra } = {
+    2: fw2,
+    3: fw3,
+}
 
 gui.add(
     {
@@ -225,6 +249,11 @@ gui.add(
     'save',
 )
 
+function onTypeChange(type: number) {
+    Object.keys(fConfigs).forEach((k) => fConfigs[parseInt(k)].hide())
+    fConfigs[type]?.show()
+}
+
 const cf = gui.addFolder('colors')
 makePalettesGui(cf, drawing.palette, palettes, (pal) => {
     drawing.palette = pal
@@ -232,7 +261,7 @@ makePalettesGui(cf, drawing.palette, palettes, (pal) => {
     drawing.draw(ctx, sizes)
 })
 
-f.onChange((e) => {
+function onGuiChange() {
     try {
         ctx.clearRect(0, 0, sizes.width, sizes.height)
         drawing.generate(false)
@@ -240,4 +269,9 @@ f.onChange((e) => {
     } catch (e) {
         console.warn(e)
     }
-})
+}
+
+f.onChange(onGuiChange)
+fw2.onChange(onGuiChange)
+fw3.onChange(onGuiChange)
+onTypeChange(C.type)

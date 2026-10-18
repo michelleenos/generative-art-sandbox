@@ -7,11 +7,13 @@ import { palettes, WalkerPalette } from '../walker-palettes'
 import { initWalkers, smoothDrawPath, walkAll } from '../walking-utils'
 import { Field } from '../field'
 import { shuffle } from '~/helpers/utils'
-
-import walkers from '../walkers'
 import { AnimPath, buildAnimPaths, PathAnimator, ScheduleOptions, Stroke } from './walk-animator'
 import { easing, Easing } from '~/helpers/easings'
 import { makePalettesGui } from '~/helpers/gui-palettes'
+import { Walker } from '../walkers/walker-base'
+import { Walker3Params } from '../walkers/walker3'
+import walkers from '../walkers'
+import { Walker2Params } from '../walkers/walker2'
 
 const C = {
     cell: 10,
@@ -22,13 +24,25 @@ const C = {
     tileMax: 12,
     walkTogether: true,
     wrap: true,
-    patternEven: true,
-    tesselation: true,
+    patternEven: false,
+    tesselation: false,
+    type: 1 as keyof typeof walkers,
+
     cornerSmoothTimes: 2,
     cornerSmoothAmt: 0.25,
 
     clip: false,
     extraCells: 0,
+
+    w2: {
+        interval: 2,
+        tilt: 1,
+    } as Required<Walker2Params>,
+
+    w3: {
+        len1: 6,
+        len2: 4,
+    } as Required<Walker3Params>,
 
     // animation
     speed: 400,
@@ -97,17 +111,32 @@ class Drawing {
 
         this.field = new Field(oCols, oRows)
         const colors = shuffle([...this.palette.colors], makeRng(makeRandomSeed(this.rng)))
-        this.walkers = initWalkers(Walker3, this.field, {
-            colors,
-            rng: this.rng,
-            count: C.patterns,
-            tileMin: C.tileMin,
-            tileMax: C.tileMax,
-            patternEven: C.patternEven,
-            tesselation: C.tesselation,
-            maxSteps: C.maxSteps,
-            wrap: C.wrap,
-        })
+        this.walkers = initWalkers(
+            {
+                field: this.field,
+                colors,
+                rng: this.rng,
+                count: C.patterns,
+                tileMin: C.tileMin,
+                tileMax: C.tileMax,
+                patternEven: C.patternEven,
+                tesselation: C.tesselation,
+                maxSteps: C.maxSteps,
+                wrap: C.wrap,
+            },
+            (p) => {
+                switch (C.type) {
+                    case 1:
+                        return new walkers[1](p)
+                    case 2:
+                        return new walkers[2](p, C.w2)
+                    case 3:
+                        return new walkers[3](p, C.w3)
+                    case 4:
+                        return new walkers[4](p, { seed: makeRandomSeed(this.rng) })
+                }
+            },
+        )
 
         walkAll(this.walkers, C.walkTogether)
     }
@@ -190,17 +219,21 @@ gui.add(animator, 'progress', 0, 1, 0.001)
     .listen()
     .onChange((v: number) => animator.seek(v))
 
+// prettier-ignore
+const easeOptions: Easing[] = ['linear', 'inSine', 'outSine', 'inOutSine', 'inQuad', 'outQuad', 'inOutQuad', 'inCubic', 'outCubic', 'inOutCubic', 'inQuart', 'outQuart', 'inOutQuart', 'inQuint', 'outQuint', 'inOutQuint']
 gui.add(C, 'mode', ['stagger', 'stagger-endings', 'align-endings']).onChange(onTimelineChange)
 gui.add(C, 'orderBy', Object.keys(orderKeys)).onChange(onTimelineChange)
 gui.add(C, 'speed', 40, 2000, 1).onChange(onTimelineChange)
 gui.add(C, 'overlap', 0, 1, 0.01).onChange(onTimelineChange)
-gui.add(C, 'staggerEase', Object.keys(easing)).onChange(onTimelineChange)
-gui.add(C, 'pathEase', Object.keys(easing)).onChange(() => animator.update())
+gui.add(C, 'staggerEase', easeOptions).onChange(onTimelineChange)
+gui.add(C, 'pathEase', easeOptions).onChange(() => animator.update())
 
 gui.add({ newSeed: () => regenerate(true) }, 'newSeed')
 
 const f = gui.addFolder('drawing')
+f.add(C, 'type', [1, 2, 3, 4]).onChange(onTypeChange)
 f.add(C, 'grid', 20, 150, 1)
+f.add(C, 'cell', 2, 50, 1)
 f.add(C, 'patterns', 1, 20, 1)
 f.add(C, 'maxSteps', 2, 2000, 1)
 f.add(C, 'tileMin', 2, 50, 1)
@@ -209,7 +242,29 @@ f.add(C, 'walkTogether')
 f.add(C, 'patternEven')
 f.add(C, 'tesselation')
 f.add(C, 'wrap')
+
+const fw2 = gui.addFolder('Walker2')
+fw2.add(C.w2, 'interval', 1, 10, 1)
+fw2.add(C.w2, 'tilt', [1, 2])
+
+const fw3 = gui.addFolder('Walker3')
+fw3.add(C.w3, 'len1', 1, 20, 1)
+fw3.add(C.w3, 'len2', 1, 20, 1)
+
+const fConfigs: { [key: number]: GUI } = {
+    2: fw2,
+    3: fw3,
+}
+
+function onTypeChange(type: number) {
+    Object.keys(fConfigs).forEach((k) => fConfigs[parseInt(k)].hide())
+    fConfigs[type]?.show()
+}
+
 f.onChange(() => regenerate(false))
+fw2.onChange(() => regenerate(false))
+fw3.onChange(() => regenerate(false))
+onTypeChange(C.type)
 
 makePalettesGui(gui.addFolder('colors'), drawing.palette, palettes, (pal) => {
     drawing.palette = pal

@@ -1,9 +1,8 @@
 import { SquareDir } from '../walk-directions'
 import { Walker } from './walker-base'
-// import { WalkerParams } from '../walking-utils'
 import { WalkerParams } from './walker-base'
 
-type Walker2Params = {
+export type Walker2Params = {
     /**
      * how often to oscillate directions. defaults to 2 (every other step).
      */

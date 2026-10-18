@@ -17,7 +17,7 @@ export interface WalkerParams {
     wrap?: boolean
 }
 
-export class Walker {
+export abstract class Walker {
     segments: XY[][]
     dir: SquareDir
     field: Field

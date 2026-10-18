@@ -18,7 +18,7 @@ import {
     walkAll,
     walkStep,
 } from '../walking-utils'
-import { Walker } from '../walkers/walker-base'
+import { Walker1 } from '../walkers/walker1'
 
 const C = {
     cell: 10,
@@ -48,7 +48,7 @@ class Drawing {
     inner!: { cols: number; rows: number; w: number; h: number }
     outer!: { cols: number; rows: number; w: number; h: number }
     field!: Field
-    walkers!: Walker[]
+    walkers!: Walker1[]
     palette: WalkerPalette
 
     constructor(palette: WalkerPalette, seed?: number) {
@@ -88,7 +88,7 @@ class Drawing {
                 maxSteps: C.maxSteps,
                 wrap: C.wrap,
             },
-            (p) => new Walker(p),
+            (p) => new Walker1(p),
         )
 
         if (!C.step) walkAll(this.walkers, C.walkTogether)
